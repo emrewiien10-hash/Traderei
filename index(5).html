@@ -1,0 +1,2377 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>traderei – Lokal tauschen</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700;800&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<style>
+  :root{
+    --paper:#0D0E15;
+    --ink:#F3F4F9;
+    --forest:#8C7CFF;
+    --forest-light:#B3A6FF;
+    --marigold:#FF5DA2;
+    --gold:#FFC24B;
+    --line: rgba(255,255,255,0.10);
+    --card-bg:#1A1C27;
+    --card-bg-2:#20222F;
+    --muted:#9498AE;
+    --danger:#FF6B6B;
+    --cyan:#2FE0C4;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0; height:100%; overflow:hidden;}
+  body{
+    background:var(--paper);
+    color:var(--ink);
+    font-family:'Inter',system-ui,-apple-system,'Segoe UI',sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  button{font-family:inherit;}
+  .app{
+    max-width:430px;
+    margin:0 auto;
+    height:100vh;
+    height:100dvh;
+    background:var(--paper);
+    position:relative;
+    display:flex;
+    flex-direction:column;
+    overflow:hidden;
+  }
+  .view{display:none;}
+  .view.active{display:flex; flex-direction:column; flex:1; min-height:0;}
+
+  /* ---- shared header pieces ---- */
+  .topbar{
+    padding:22px 18px 14px;
+    background:linear-gradient(135deg, #6E5AF0 0%, #8C7CFF 45%, #C264E8 78%, #FF5DA2 100%);
+    color:#fff;
+    border-radius:0 0 26px 26px;
+  }
+  .brand-row{
+    display:flex; align-items:baseline; justify-content:space-between;
+    margin-bottom:14px;
+  }
+  .brand{font-family:'Sora', sans-serif; font-weight:700; font-size:24px; letter-spacing:-0.01em; display:flex; align-items:center; gap:9px;}
+  .brand em{font-style:normal;color:var(--gold);}
+  .locpill{font-size:12.5px; color:#C9CEE7; display:flex; align-items:center; gap:5px;}
+  .searchbar{
+    background:rgba(255,255,255,0.12);
+    border:1px solid rgba(255,255,255,0.18);
+    border-radius:13px;
+    display:flex; align-items:center; gap:8px;
+    padding:11px 13px;
+  }
+  .searchbar input{
+    background:transparent; border:none; outline:none; color:#fff;
+    font-size:14.5px; width:100%; font-family:inherit;
+  }
+  .searchbar input::placeholder{color:#AEB3CE;}
+  .sort-row{display:flex; justify-content:flex-end; margin-top:9px; position:relative;}
+  .sort-btn{
+    display:flex; align-items:center; gap:6px;
+    background:rgba(255,255,255,0.12); border:1px solid rgba(255,255,255,0.18);
+    color:#ECEAFB; font-size:12.5px; font-weight:600;
+    padding:7px 12px; border-radius:999px; cursor:pointer;
+  }
+  .sort-btn svg{width:14px; height:14px; transition:transform .15s ease;}
+  .sort-btn.open svg{transform:rotate(180deg);}
+  .sort-menu{
+    position:absolute; top:calc(100% + 8px); right:0; z-index:15;
+    background:var(--card-bg); border-radius:14px; border:1px solid var(--line);
+    box-shadow:0 14px 28px rgba(0,0,0,0.18);
+    padding:6px; min-width:172px;
+    display:none;
+  }
+  .sort-menu.open{display:block;}
+  .sort-opt{
+    padding:10px 12px; border-radius:9px; font-size:13px; font-weight:600; color:var(--ink);
+    cursor:pointer; display:flex; align-items:center; justify-content:space-between;
+  }
+  .sort-opt:active{background:var(--paper);}
+  .sort-opt.active{color:var(--forest);}
+  .sort-opt.active::after{content:'✓'; font-weight:700;}
+  .subheader{
+    padding:16px 18px 10px;
+    background:#1A1C2A;
+    color:#fff;
+    border-radius:0 0 22px 22px;
+    display:flex;
+    align-items:center;
+    gap:12px;
+  }
+  .back-btn{
+    width:34px;height:34px;
+    border-radius:50%;
+    background:rgba(255,255,255,0.14);
+    border:none;
+    color:#fff;
+    font-size:17px;
+    display:flex;align-items:center;justify-content:center;
+    cursor:pointer;
+    flex-shrink:0;
+  }
+  .subheader-title{font-family:'Sora',sans-serif; font-weight:600; font-size:19px;}
+  .subheader-sub{font-size:11.5px; color:#CFC9FF; margin-top:1px;}
+
+  /* ---- Mode toggle & filters (feed) ---- */
+  .modes{display:flex; gap:8px; padding:14px 16px 6px;}
+  .mode-btn{
+    flex:1; padding:10px 8px; border-radius:11px;
+    border:1.5px solid var(--line); background:var(--card-bg);
+    font-size:13.5px; font-weight:600; color:var(--ink);
+    text-align:center; cursor:pointer;
+  }
+  .mode-btn.active{background:var(--marigold); border-color:var(--marigold); color:#fff;}
+  .filters{display:flex; gap:8px; padding:10px 16px 4px; overflow-x:auto; scrollbar-width:none;}
+  .filters::-webkit-scrollbar{display:none;}
+  .chip{
+    flex:0 0 auto; padding:7px 13px; border-radius:999px;
+    border:1px solid var(--line); background:var(--card-bg);
+    font-size:12.5px; font-weight:500; color:var(--forest);
+    white-space:nowrap; cursor:pointer;
+  }
+  .chip.active{background:var(--forest); border-color:var(--forest); color:#fff;}
+  .guest-bar{
+    display:flex; align-items:center; justify-content:space-between; gap:10px;
+    margin:12px 16px 0; padding:11px 14px; border-radius:13px;
+    background:rgba(140,124,255,0.14); border:1px solid rgba(140,124,255,0.3);
+    font-size:12px; color:var(--ink);
+  }
+  .guest-bar-btn{
+    flex-shrink:0; padding:7px 14px; border-radius:999px; border:none;
+    background:var(--forest); color:#fff; font-size:12px; font-weight:700; cursor:pointer;
+  }
+  .filters.sub .chip{
+    background:transparent; border-color:transparent; color:var(--muted);
+    padding:6px 11px; font-size:12px;
+  }
+  .filters.sub .chip.active{background:rgba(140,124,255,0.16); border-color:rgba(140,124,255,0.16); color:var(--forest); font-weight:700;}
+
+  /* ---- Feed / listing cards ---- */
+  .feed{padding:12px 16px 96px; display:flex; flex-direction:column; gap:12px; flex:1; min-height:0; overflow-y:auto;}
+  .empty-state{padding:34px 12px; text-align:center; color:var(--muted); font-size:13px;}
+  .listing{
+    background:var(--card-bg); border:1px solid var(--line); border-radius:16px;
+    padding:14px; display:flex; gap:12px; cursor:pointer;
+    transition:border-color .15s ease;
+  }
+  .listing:active{border-color:var(--forest);}
+  .thumb{
+    width:64px; height:88px; border-radius:8px; flex-shrink:0;
+    display:flex; align-items:center; justify-content:center;
+    font-size:20px; color:#fff; font-family:'Sora',sans-serif; font-weight:600;
+    position:relative; overflow:hidden;
+  }
+  .thumb::after{content:''; position:absolute; inset:0; background:linear-gradient(160deg, rgba(255,255,255,.25), transparent 55%);}
+  .thumb.lg{width:100%; height:180px; border-radius:14px; font-size:32px;}
+  .listing-body{flex:1; min-width:0;}
+  .listing-top{display:flex; justify-content:space-between; align-items:flex-start; gap:8px;}
+  .listing-title{font-size:14.5px; font-weight:700; line-height:1.25;}
+  .listing-game{font-size:11px; color:var(--muted); margin-top:2px;}
+  .tag-mode{font-size:10.5px; font-weight:700; padding:3px 8px; border-radius:999px; flex-shrink:0; white-space:nowrap;}
+  .tag-mode.tausch{background:rgba(140,124,255,0.16); color:var(--forest);}
+  .tag-mode.verkauf{background:rgba(255,93,162,0.16); color:var(--marigold);}
+  .tag-status{font-size:10.5px; font-weight:700; padding:3px 8px; border-radius:999px; flex-shrink:0;}
+  .tag-status.aktiv{background:rgba(140,124,255,0.16); color:var(--forest);}
+  .tag-status.done{background:rgba(255,255,255,0.08); color:var(--muted);}
+  .trade-row{margin-top:8px; font-size:12.5px; display:flex; gap:6px; align-items:flex-start; line-height:1.35;}
+  .trade-label{font-weight:700; flex-shrink:0;}
+  .trade-label.has{color:var(--forest);}
+  .trade-label.wants{color:var(--marigold);}
+  .listing-foot{margin-top:9px; display:flex; justify-content:space-between; align-items:center;}
+  .meta{font-size:11.5px; color:var(--muted); display:flex; align-items:center; gap:4px;}
+  .price{font-weight:700; font-size:13.5px; color:var(--forest);}
+
+  /* ---- Bottom nav ---- */
+  .navbar{
+    position:sticky; bottom:0; left:0; right:0;
+    margin:0 16px 18px;
+    background:var(--card-bg);
+    border:1px solid var(--line);
+    border-radius:24px;
+    box-shadow:0 14px 30px rgba(27,43,34,0.16);
+    display:flex;
+    gap:6px;
+    padding:10px;
+  }
+  .navitem{
+    flex:1;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px;
+    padding:12px 6px 11px;
+    border-radius:17px;
+    font-size:11.5px;
+    color:var(--muted);
+    font-weight:600;
+    cursor:pointer;
+    transition:background-color .15s ease, color .15s ease;
+  }
+  .navitem.active{color:var(--forest); background:rgba(140,124,255,0.16);}
+  .navicon{width:24px; height:24px; display:flex;align-items:center;justify-content:center; position:relative;}
+  .navicon svg{width:23px; height:23px;}
+  .navdot{
+    position:absolute; top:-2px; right:-4px; width:8px; height:8px; border-radius:50%;
+    background:var(--marigold); border:1.5px solid #fff;
+  }
+  .fab{
+    position:absolute; bottom:96px; right:18px; width:54px;height:54px; border-radius:50%;
+    background:linear-gradient(135deg, #8C7CFF, #FF5DA2); color:#fff; display:flex;align-items:center;justify-content:center;
+    box-shadow:0 8px 20px rgba(255,93,162,0.4); cursor:pointer; border:none;
+  }
+  .fab svg{width:24px; height:24px;}
+
+  /* ---- Listing detail ---- */
+  .detail-scroll{padding:16px 16px 100px; flex:1; min-height:0; overflow-y:auto;}
+  .seller-row{
+    display:flex; align-items:center; gap:11px; margin-top:16px;
+    padding:13px; background:var(--card-bg); border:1px solid var(--line); border-radius:14px;
+  }
+  .avatar{
+    width:42px;height:42px;border-radius:50%; background:var(--forest); color:#fff;
+    display:flex;align-items:center;justify-content:center; font-weight:700; font-size:15px; flex-shrink:0;
+  }
+  .seller-name{font-size:13.5px; font-weight:700;}
+  .seller-rating{font-size:11.5px; color:var(--muted); margin-top:1px;}
+  .detail-title{font-family:'Sora',sans-serif; font-size:20px; font-weight:600; margin-top:16px; line-height:1.3;}
+  .detail-meta-row{display:flex; gap:10px; margin-top:6px; flex-wrap:wrap;}
+  .detail-block{
+    margin-top:16px; padding:14px; border-radius:14px; border:1px solid var(--line); background:var(--card-bg);
+  }
+  .detail-block-label{font-size:11px; font-weight:700; text-transform:none; margin-bottom:4px;}
+  .detail-block-label.has{color:var(--forest);}
+  .detail-block-label.wants{color:var(--marigold);}
+  .detail-block-text{font-size:13.5px; line-height:1.5;}
+  .detail-actions{
+    position:absolute; bottom:0; left:0; right:0; padding:14px 16px calc(14px + env(safe-area-inset-bottom));
+    background:var(--card-bg); border-top:1px solid var(--line); display:flex; gap:10px;
+  }
+  .btn{
+    flex:1; padding:13px; border-radius:12px; border:none; font-size:14px; font-weight:700; cursor:pointer;
+  }
+  .btn-primary{background:var(--marigold); color:#fff;}
+  .btn-secondary{background:var(--forest); color:#fff;}
+
+  /* ---- Chats list ---- */
+  .chatlist{padding:8px 12px 90px; flex:1; min-height:0; overflow-y:auto;}
+  .chat-item{
+    display:flex; gap:11px; padding:12px 8px; border-bottom:1px solid var(--line); cursor:pointer;
+  }
+  .chat-item-body{flex:1; min-width:0;}
+  .chat-item-top{display:flex; justify-content:space-between; gap:6px;}
+  .chat-name{font-size:14px; font-weight:700;}
+  .chat-time{font-size:11px; color:var(--muted); flex-shrink:0;}
+  .chat-context{font-size:11px; color:var(--marigold); margin-top:1px; font-weight:600;}
+  .chat-preview{font-size:12.5px; color:var(--muted); margin-top:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .chat-preview.unread{color:var(--ink); font-weight:600;}
+  .unread-dot{width:9px;height:9px;border-radius:50%; background:var(--marigold); flex-shrink:0; margin-top:5px;}
+
+  /* ---- Chat detail ---- */
+  .messages{flex:1; min-height:0; overflow-y:auto; padding:14px 14px 8px; display:flex; flex-direction:column; gap:9px;}
+  .context-card{
+    display:flex; gap:9px; align-items:center; background:var(--card-bg); border:1px solid var(--line);
+    border-radius:12px; padding:9px; margin:0 14px 6px;
+  }
+  .context-card .thumb{width:38px; height:52px; font-size:12px;}
+  .context-card-title{font-size:12.5px; font-weight:700;}
+  .context-card-sub{font-size:10.5px; color:var(--muted);}
+  .bubble{max-width:78%; padding:10px 13px; border-radius:16px; font-size:13.5px; line-height:1.4;}
+  .bubble.them{background:var(--card-bg); border:1px solid var(--line); align-self:flex-start; border-bottom-left-radius:4px;}
+  .bubble.me{background:var(--forest); color:#fff; align-self:flex-end; border-bottom-right-radius:4px;}
+  .bubble.me .bubble-time{color:rgba(255,255,255,0.75);}
+  .bubble-time{font-size:10px; color:var(--muted); margin-top:3px;}
+  .composer{
+    display:flex; gap:8px; padding:10px 12px calc(10px + env(safe-area-inset-bottom));
+    border-top:1px solid var(--line); background:var(--card-bg);
+  }
+  .composer input{
+    flex:1; border:1px solid var(--line); border-radius:20px; padding:10px 15px; font-size:13.5px; outline:none; font-family:inherit;
+    background:var(--card-bg); color:var(--ink);
+  }
+  .composer input::placeholder{color:var(--muted);}
+  .send-btn{
+    width:40px;height:40px; border-radius:50%; background:var(--marigold); border:none; color:#fff;
+    font-size:16px; display:flex;align-items:center;justify-content:center; cursor:pointer; flex-shrink:0;
+  }
+
+  /* ---- Profile ---- */
+  .profile-scroll{flex:1; min-height:0; overflow-y:auto; padding-bottom:90px;}
+  .profile-head{padding:22px 18px 20px; background:var(--forest); color:#fff; border-radius:0 0 22px 22px; text-align:center;}
+  .profile-avatar{
+    width:66px;height:66px;border-radius:50%; background:var(--gold); color:var(--forest);
+    display:flex;align-items:center;justify-content:center; font-family:'Sora',sans-serif; font-weight:700; font-size:24px;
+    margin:0 auto 10px;
+  }
+  .profile-name{font-family:'Sora',sans-serif; font-size:19px; font-weight:600;}
+  .profile-sub{font-size:12px; color:#CFC9FF; margin-top:2px;}
+  .stat-row{display:flex; margin-top:16px; gap:10px;}
+  .stat{flex:1; background:rgba(255,255,255,0.1); border-radius:12px; padding:10px 6px;}
+  .stat-num{font-size:17px; font-weight:700;}
+  .stat-label{font-size:10px; color:#CFC9FF; margin-top:1px;}
+  .profile-tabs{display:flex; gap:6px; padding:14px 16px 6px;}
+  .ptab{flex:1; text-align:center; padding:9px 4px; border-radius:10px; font-size:12px; font-weight:600; color:var(--muted); cursor:pointer;}
+  .ptab.active{background:var(--card-bg); color:var(--forest); border:1px solid var(--line);}
+  .profile-list{padding:8px 16px 20px; display:flex; flex-direction:column; gap:10px;}
+
+  /* ---- Profil-Menüliste ---- */
+  .menu-section{padding:6px 16px; border-bottom:1px solid var(--line);}
+  .menu-section:last-child{border-bottom:none; padding-bottom:22px;}
+  .menu-row{
+    display:flex; align-items:center; gap:13px; padding:13px 2px; cursor:pointer;
+  }
+  .menu-icon{
+    width:38px; height:38px; border-radius:50%; flex-shrink:0;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .menu-icon svg{width:19px; height:19px;}
+  .menu-label{flex:1; font-size:14.5px; font-weight:600; color:var(--ink);}
+  .menu-chevron{width:17px; height:17px; color:var(--muted); flex-shrink:0;}
+  .menu-row.plain{padding:13px 2px;}
+  .menu-row.plain .menu-label{font-weight:500; font-size:14px;}
+  .menu-row.danger .menu-label{color:var(--danger); font-weight:600;}
+
+  /* ---- Create listing form ---- */
+  .form-scroll{padding:16px 16px 110px; flex:1; min-height:0; overflow-y:auto;}
+  .field{margin-top:18px;}
+  .field-label{font-size:12.5px; font-weight:700; color:var(--forest); margin-bottom:7px;}
+  .field-hint{font-size:11px; color:var(--muted); margin-top:5px; line-height:1.4;}
+  .text-input, .text-area{
+    width:100%; border:1.5px solid var(--line); border-radius:12px; padding:12px 13px;
+    font-size:14px; font-family:inherit; outline:none; background:var(--card-bg); color:var(--ink);
+  }
+  .text-input:focus, .text-area:focus{border-color:var(--forest);}
+  .text-area{resize:vertical; min-height:64px; line-height:1.4;}
+  .photo-row{display:flex; gap:10px;}
+  .photo-tile{
+    width:78px; height:78px; border-radius:12px; border:1.5px dashed var(--line);
+    display:flex; align-items:center; justify-content:center; cursor:pointer;
+    font-size:22px; color:var(--muted); background:var(--card-bg); flex-shrink:0; position:relative; overflow:hidden;
+  }
+  .photo-tile.filled{border-style:solid; color:#fff; font-family:'Sora',sans-serif; font-weight:600; font-size:16px;}
+  .photo-remove{
+    position:absolute; top:3px; right:3px; width:19px;height:19px; border-radius:50%;
+    background:rgba(0,0,0,0.45); color:#fff; font-size:11px; display:flex;align-items:center;justify-content:center; cursor:pointer;
+  }
+  .chip-select{display:flex; gap:8px; flex-wrap:wrap;}
+  .chip-opt{
+    padding:9px 14px; border-radius:999px; border:1.5px solid var(--line); background:var(--card-bg);
+    font-size:12.5px; font-weight:600; color:var(--ink); cursor:pointer;
+  }
+  .chip-opt.active{background:var(--forest); border-color:var(--forest); color:#fff;}
+  .price-input-wrap{position:relative;}
+  .price-input-wrap .text-input{padding-right:34px;}
+  .price-suffix{position:absolute; right:13px; top:50%; transform:translateY(-50%); font-size:14px; color:var(--muted);}
+  .form-actions{
+    position:absolute; bottom:0; left:0; right:0; padding:14px 16px calc(14px + env(safe-area-inset-bottom));
+    background:var(--card-bg); border-top:1px solid var(--line);
+  }
+  .field-error{font-size:11.5px; color:#FF6B6B; margin-top:5px; display:none;}
+  .field-error.show{display:block;}
+  .toast{
+    position:absolute; top:14px; left:50%; transform:translateX(-50%);
+    background:var(--forest); color:#fff; padding:10px 18px; border-radius:999px; font-size:13px; font-weight:600;
+    box-shadow:0 8px 18px rgba(0,0,0,0.2); z-index:20; opacity:0; pointer-events:none; transition:opacity .25s ease, top .25s ease;
+  }
+  .toast.show{opacity:1; top:24px;}
+
+  /* ---- Favoriten (Herz) ---- */
+  .fav-btn{
+    width:30px; height:30px; border-radius:50%; border:none; background:rgba(13,14,21,0.6); backdrop-filter:blur(4px);
+    display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0;
+    box-shadow:0 2px 6px rgba(0,0,0,0.12);
+  }
+  .fav-btn svg{width:16px; height:16px; stroke:var(--forest); fill:none; transition:fill .15s ease, stroke .15s ease;}
+  .fav-btn.active svg{fill:var(--marigold); stroke:var(--marigold);}
+  .listing{position:relative;}
+  .listing .fav-btn{position:absolute; top:10px; right:10px;}
+  .listing.has-fav .listing-top{padding-right:28px;}
+  .detail-fav{
+    position:absolute; top:14px; right:14px; width:38px; height:38px; border-radius:50%;
+    background:rgba(13,14,21,0.6); backdrop-filter:blur(4px); border:none; display:flex; align-items:center; justify-content:center; cursor:pointer;
+  }
+  .detail-fav svg{width:19px; height:19px; stroke:var(--forest); fill:none;}
+  .detail-fav.active svg{fill:var(--marigold); stroke:var(--marigold);}
+
+  /* ---- Verifiziert / Shop Badge ---- */
+  .verified-badge{
+    display:inline-flex; align-items:center; gap:3px; font-size:10.5px; font-weight:700; color:var(--forest);
+    background:rgba(140,124,255,0.16); padding:2px 7px; border-radius:999px; margin-left:6px; vertical-align:middle;
+  }
+  .verified-badge svg{width:11px; height:11px;}
+  .shop-badge{
+    display:inline-flex; align-items:center; gap:3px; font-size:10.5px; font-weight:700; color:#FFD98A;
+    background:rgba(255,194,75,0.14); padding:2px 7px; border-radius:999px; margin-left:6px; vertical-align:middle;
+  }
+  .shop-badge svg{width:11px; height:11px;}
+
+  /* ---- Location / Radius popover ---- */
+  .locpill{cursor:pointer;}
+  .radius-panel{
+    position:absolute; top:64px; left:18px; right:18px; z-index:16;
+    background:var(--card-bg); border-radius:16px; padding:16px; box-shadow:0 16px 32px rgba(0,0,0,0.22);
+    display:none;
+  }
+  .radius-panel.open{display:block;}
+  .radius-panel-label{font-size:12.5px; font-weight:700; color:var(--forest); display:flex; justify-content:space-between;}
+  .radius-panel input[type=range]{width:100%; margin-top:10px; accent-color:var(--marigold);}
+
+  /* ---- Overflow-Menü (Melden/Blockieren) ---- */
+  .overflow-btn{
+    width:34px;height:34px;border-radius:50%; background:rgba(255,255,255,0.14); border:none; color:#fff;
+    display:flex;align-items:center;justify-content:center; cursor:pointer; flex-shrink:0; margin-left:auto;
+  }
+  .overflow-menu{
+    position:absolute; z-index:20; background:var(--card-bg); border-radius:14px; border:1px solid var(--line);
+    box-shadow:0 14px 28px rgba(0,0,0,0.2); padding:6px; min-width:180px; display:none;
+  }
+  .overflow-menu.open{display:block;}
+  .overflow-opt{padding:11px 12px; border-radius:9px; font-size:13px; font-weight:600; color:var(--ink); cursor:pointer;}
+  .overflow-opt.danger{color:#FF6B6B;}
+  .overflow-opt:active{background:var(--paper);}
+
+  /* ---- Modal / Sheet overlay ---- */
+  .overlay{
+    position:absolute; inset:0; background:rgba(5,5,12,0.62); z-index:30;
+    display:none; align-items:flex-end;
+  }
+  .overlay.open{display:flex;}
+  .sheet{
+    background:var(--card-bg); width:100%; border-radius:22px 22px 0 0; padding:18px 18px calc(18px + env(safe-area-inset-bottom));
+    max-height:82%; overflow-y:auto;
+  }
+  .sheet-title{font-family:'Sora',sans-serif; font-size:18px; font-weight:600; margin-bottom:4px;}
+  .sheet-sub{font-size:12.5px; color:var(--muted); margin-bottom:14px;}
+  .sheet-close{
+    width:30px;height:30px;border-radius:50%; background:var(--paper); border:none; display:flex;align-items:center;justify-content:center;
+    cursor:pointer; float:right;
+  }
+  .pick-item{
+    display:flex; gap:11px; padding:11px; border:1.5px solid var(--line); border-radius:13px; margin-bottom:9px; cursor:pointer;
+  }
+  .pick-item.selected{border-color:var(--forest); background:rgba(140,124,255,0.12);}
+  .pick-item .thumb{width:46px; height:62px; font-size:13px;}
+  .pick-item-title{font-size:13px; font-weight:700;}
+  .pick-item-sub{font-size:11px; color:var(--muted); margin-top:2px;}
+  .star-row{display:flex; gap:8px; justify-content:center; margin:14px 0;}
+  .star-btn{background:none; border:none; cursor:pointer; padding:0;}
+  .star-btn svg{width:34px; height:34px; stroke:var(--gold); fill:none;}
+  .star-btn.filled svg{fill:var(--gold);}
+  .meetup-opt{
+    display:flex; align-items:center; gap:10px; padding:12px; border:1.5px solid var(--line); border-radius:13px; margin-bottom:9px; cursor:pointer;
+  }
+  .meetup-opt-icon{width:34px;height:34px;border-radius:50%; background:rgba(140,124,255,0.16); color:var(--forest); display:flex;align-items:center;justify-content:center; flex-shrink:0;}
+  .meetup-opt-title{font-size:13px; font-weight:700;}
+  .meetup-opt-sub{font-size:11px; color:var(--muted);}
+  .boost-price{font-family:'Sora',sans-serif; font-size:26px; font-weight:600; color:var(--forest); text-align:center; margin:6px 0 2px;}
+  .boost-sub{font-size:12px; color:var(--muted); text-align:center; margin-bottom:16px;}
+  .plus-feature{display:flex; gap:10px; padding:9px 0; font-size:13px; align-items:flex-start;}
+  .plus-feature svg{width:17px;height:17px; stroke:var(--forest); flex-shrink:0; margin-top:1px;}
+
+  /* ---- Quick actions in chat ---- */
+  .quick-actions{display:flex; gap:8px; padding:0 14px 8px; overflow-x:auto; scrollbar-width:none;}
+  .quick-actions::-webkit-scrollbar{display:none;}
+  .quick-chip{
+    flex-shrink:0; display:flex; align-items:center; gap:6px; padding:8px 12px; border-radius:999px;
+    border:1px solid var(--line); background:var(--card-bg); font-size:12px; font-weight:600; color:var(--forest); cursor:pointer;
+  }
+  .quick-chip svg{width:14px;height:14px;}
+  .system-bubble{
+    align-self:center; background:rgba(140,124,255,0.16); color:var(--forest); font-size:11.5px; font-weight:600;
+    padding:8px 13px; border-radius:12px; max-width:88%; text-align:center;
+  }
+  .offer-bubble{
+    align-self:flex-end; max-width:82%; background:var(--forest); color:#fff; border-radius:16px; border-bottom-right-radius:4px;
+    padding:11px 13px;
+  }
+  .offer-bubble .offer-title{font-size:11px; font-weight:700; color:var(--gold); margin-bottom:6px;}
+  .offer-row{display:flex; align-items:center; gap:8px; font-size:12.5px; margin-bottom:3px;}
+  .offer-row .thumb{width:30px;height:40px; font-size:9px; flex-shrink:0;}
+
+  /* ---- Boosted / Verified listing highlight ---- */
+  .listing.boosted{border-color:var(--gold); box-shadow:0 0 0 1px var(--gold) inset;}
+  .boost-tag{
+    position:absolute; top:10px; left:10px; background:var(--gold); color:var(--forest);
+    font-size:10px; font-weight:700; padding:3px 8px; border-radius:999px; display:flex; align-items:center; gap:3px;
+  }
+  .boost-tag svg{width:10px;height:10px;}
+
+  /* ---- Marktpreis Premium-Teaser (Cardmarket) ---- */
+  .market-block{position:relative;}
+  .cm-wordmark{
+    font-family:'Sora',sans-serif; font-size:11px; font-weight:700; color:#34D399;
+    background:rgba(52,211,153,0.16); padding:2px 8px; border-radius:6px; letter-spacing:0.01em;
+  }
+  .price-teaser{position:relative; border-radius:10px; overflow:hidden; background:var(--paper); padding:10px 12px; margin-top:6px;}
+  .market-value{font-family:'Sora',sans-serif; font-size:19px; font-weight:600; color:var(--forest); filter:blur(5px); user-select:none;}
+  .market-lock{
+    position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px;
+    background:rgba(13,14,21,0.82); cursor:pointer;
+  }
+  .market-lock svg{width:18px;height:18px; stroke:var(--forest);}
+  .market-lock-text{font-size:11.5px; font-weight:700; color:var(--forest);}
+  .cm-link-btn{
+    display:flex; align-items:center; justify-content:center; gap:7px;
+    width:100%; margin-top:10px; padding:11px; border-radius:11px;
+    background:#34D399; color:#fff; font-size:13.5px; font-weight:700;
+    text-decoration:none; border:none; cursor:pointer;
+  }
+  .cm-link-btn svg{width:14px; height:14px;}
+
+  /* ---- Karte (Map view) ---- */
+  .map-wrap{flex:1; min-height:0; position:relative; background:#12131C; overflow:hidden;}
+  .map-svg{width:100%; height:100%; display:block;}
+  .map-pin{cursor:pointer;}
+  .map-pin circle.dot{fill:var(--marigold); stroke:#fff; stroke-width:2;}
+  .map-pin.tausch circle.dot{fill:var(--forest);}
+  .map-card{
+    position:absolute; left:14px; right:14px; bottom:14px; background:var(--card-bg); border-radius:16px;
+    box-shadow:0 14px 30px rgba(0,0,0,0.18); padding:12px; display:none; gap:11px;
+  }
+  .map-card.open{display:flex;}
+
+  /* ---- Radio-style boost/aktiv list item extra ---- */
+  .listing-mini-actions{display:flex; gap:8px; margin-top:9px;}
+  .mini-btn{
+    flex:1; padding:8px; border-radius:9px; border:1px solid var(--line); background:var(--card-bg);
+    font-size:11.5px; font-weight:700; color:var(--forest); cursor:pointer; text-align:center;
+  }
+  .mini-btn.gold{border-color:var(--gold); color:var(--gold); background:rgba(255,194,75,0.16);}
+
+  /* ---- Händlerprofil ---- */
+  .seller-row.clickable{cursor:pointer;}
+  .seller-row-chevron{margin-left:auto; color:var(--muted);}
+  .shop-avatar{
+    width:66px;height:66px;border-radius:18px; background:var(--gold); color:var(--forest);
+    display:flex;align-items:center;justify-content:center; margin:0 auto 10px;
+  }
+  .shop-avatar svg{width:30px; height:30px;}
+  .shop-info-row{
+    display:flex; gap:10px; align-items:flex-start; padding:12px; background:var(--card-bg);
+    border:1px solid var(--line); border-radius:13px; margin:0 16px 10px;
+  }
+  .shop-info-row svg{width:17px;height:17px; stroke:var(--forest); flex-shrink:0; margin-top:1px;}
+  .shop-info-title{font-size:12.5px; font-weight:700;}
+  .shop-info-sub{font-size:12px; color:var(--muted); margin-top:1px;}
+  .shop-link-row{display:flex; gap:8px; padding:0 16px 14px;}
+  .shop-link-btn{
+    flex:1; display:flex; align-items:center; justify-content:center; gap:6px;
+    padding:11px; border-radius:11px; border:1px solid var(--line); background:var(--card-bg);
+    font-size:12.5px; font-weight:700; color:var(--forest); text-decoration:none; cursor:pointer;
+  }
+  .shop-link-btn svg{width:15px;height:15px;}
+  .shop-section-label{font-size:12px; font-weight:700; color:var(--muted); padding:4px 16px 8px; text-transform:none;}
+
+  /* ---- Reservierungs-Bubble ---- */
+  .reserve-bubble{
+    align-self:flex-end; max-width:82%; background:var(--gold); color:var(--forest); border-radius:16px; border-bottom-right-radius:4px;
+    padding:11px 13px;
+  }
+  .reserve-bubble .offer-title{font-size:11px; font-weight:700; color:#FFD98A; margin-bottom:6px;}
+  .reserve-bubble .offer-row{color:var(--forest);}
+  .reserve-status{
+    display:inline-flex; align-items:center; gap:4px; font-size:10.5px; font-weight:700;
+    padding:2px 8px; border-radius:999px; margin-top:6px;
+  }
+  .reserve-status.pending{background:rgba(255,194,75,0.18); color:#FFD98A;}
+  .reserve-status.accepted{background:var(--forest); color:#fff;}
+  .reserve-status.declined{background:#FF6B6B; color:#fff;}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ============ FEED ============ -->
+  <div class="view active" id="view-feed">
+    <div class="topbar">
+      <div class="brand-row">
+        <div class="brand">
+          <svg width="30" height="30" viewBox="0 0 160 160" style="border-radius:8px; flex-shrink:0;">
+            <defs>
+              <linearGradient id="brandTile" x1="0" y1="0" x2="160" y2="160" gradientUnits="userSpaceOnUse">
+                <stop offset="0%" stop-color="#6E5AF0"/>
+                <stop offset="45%" stop-color="#8C7CFF"/>
+                <stop offset="78%" stop-color="#C264E8"/>
+                <stop offset="100%" stop-color="#FF5DA2"/>
+              </linearGradient>
+            </defs>
+            <rect x="0" y="0" width="160" height="160" rx="36" fill="url(#brandTile)"/>
+            <g transform="translate(96,90) rotate(16)">
+              <rect x="-33" y="-46" width="66" height="92" rx="11" fill="#FFFFFF" fill-opacity="0.55"/>
+              <circle cx="-19" cy="-32" r="6" fill="#6E5AF0"/>
+            </g>
+            <g transform="translate(66,72) rotate(-14)">
+              <rect x="-33" y="-46" width="66" height="92" rx="11" fill="#FFFFFF"/>
+              <circle cx="-19" cy="-32" r="12" fill="#FF5DA2"/>
+              <text x="-19" y="-27" text-anchor="middle" font-family="'Sora','Segoe UI',sans-serif" font-weight="700" font-size="17" fill="#FFFFFF">T</text>
+            </g>
+          </svg>
+          traderei
+        </div>
+        <div class="locpill" id="locPill">📍 <span id="locLabel">Graz, 5 km</span></div>
+      </div>
+      <div class="radius-panel" id="radiusPanel">
+        <div class="radius-panel-label"><span>Umkreis</span><span id="radiusValue">5 km</span></div>
+        <input type="range" id="radiusSlider" min="1" max="30" value="5">
+        <div class="field-hint">Zeigt nur Anzeigen innerhalb dieser Entfernung von Graz.</div>
+      </div>
+      <div class="searchbar">
+        <span>🔍</span>
+        <input type="text" id="searchInput" placeholder="Karte, Display oder Set suchen …">
+      </div>
+      <div class="sort-row">
+        <button class="sort-btn" id="sortBtn">
+          <span id="sortBtnLabel">Relevanz</span>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+        </button>
+        <div class="sort-menu" id="sortMenu">
+          <div class="sort-opt active" data-sort="relevanz">Relevanz</div>
+          <div class="sort-opt" data-sort="neu">Neueste zuerst</div>
+          <div class="sort-opt" data-sort="alt">Älteste zuerst</div>
+        </div>
+      </div>
+    </div>
+    <div class="guest-bar" id="guestBar" style="display:none;">
+      <span>Nicht eingeloggt — Anzeigen erstellen erst nach Anmeldung</span>
+      <button class="guest-bar-btn" id="guestLoginBtn">Anmelden</button>
+    </div>
+    <div class="modes">
+      <div class="mode-btn active" data-mode="alle">Alle</div>
+      <div class="mode-btn" data-mode="tausch">Tauschen</div>
+      <div class="mode-btn" data-mode="verkauf">Verkaufen</div>
+    </div>
+    <div class="filters" id="gameFilters">
+      <div class="chip active" data-game="alle">Alle Spiele</div>
+      <div class="chip" data-game="pokemon">Pokémon TCG</div>
+      <div class="chip" data-game="onepiece">One Piece TCG</div>
+      <div class="chip" data-game="lorcana">Lorcana</div>
+      <div class="chip" data-game="magic">Magic</div>
+      <div class="chip" data-game="dragonball">Dragon Ball</div>
+      <div class="chip" data-game="naruto">Naruto</div>
+      <div class="chip" data-game="sonstige">Sonstiges</div>
+    </div>
+    <div class="filters sub" id="categoryFilters" style="display:none;"></div>
+    <div class="feed" id="feed"></div>
+    <button class="fab" title="Inserat erstellen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>
+  </div>
+
+  <!-- ============ LISTING DETAIL ============ -->
+  <div class="view" id="view-detail" style="position:relative;">
+    <div class="subheader">
+      <button class="back-btn" data-back="feed">←</button>
+      <div>
+        <div class="subheader-title">Anzeige</div>
+      </div>
+      <button class="overflow-btn" id="detailOverflowBtn">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><circle cx="12" cy="5" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="19" r="1.6"/></svg>
+      </button>
+    </div>
+    <div class="detail-scroll" id="detailScroll"></div>
+  </div>
+
+  <!-- ============ CHATS LIST ============ -->
+  <div class="view" id="view-chats">
+    <div class="topbar" style="border-radius:0 0 22px 22px;">
+      <div class="brand-row" style="margin-bottom:0;">
+        <div class="subheader-title">Nachrichten</div>
+      </div>
+    </div>
+    <div class="chatlist" id="chatlist"></div>
+  </div>
+
+  <!-- ============ CHAT DETAIL ============ -->
+  <div class="view" id="view-chat" style="height:100vh;">
+    <div class="subheader">
+      <button class="back-btn" data-back="chats">←</button>
+      <div>
+        <div class="subheader-title" id="chatPartnerName">—</div>
+        <div class="subheader-sub" id="chatPartnerSub">—</div>
+      </div>
+      <button class="overflow-btn" id="chatOverflowBtn">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><circle cx="12" cy="5" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="19" r="1.6"/></svg>
+      </button>
+    </div>
+    <div class="context-card" id="chatContext" style="margin-top:12px;"></div>
+    <div class="messages" id="messages"></div>
+    <div class="quick-actions">
+      <div class="quick-chip" id="meetupChip">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-6.5-5.2-8.5-9.2A5.5 5.5 0 0 1 12 4a5.5 5.5 0 0 1 8.5 7.8C18.5 15.8 12 21 12 21Z"/><circle cx="12" cy="10.5" r="2"/></svg>
+        Sicherer Treffpunkt
+      </div>
+    </div>
+    <div class="composer">
+      <input type="text" id="msgInput" placeholder="Nachricht schreiben …">
+      <button class="send-btn" id="sendBtn">➤</button>
+    </div>
+  </div>
+
+  <!-- ============ PROFILE ============ -->
+  <div class="view" id="view-profile">
+    <div class="profile-scroll">
+      <div class="profile-head">
+        <div class="profile-avatar" id="profileAvatar"></div>
+        <div class="profile-name" id="profileNameEl"></div>
+        <div class="profile-sub" id="profileSubEl"></div>
+        <div class="stat-row">
+          <div class="stat"><div class="stat-num" id="statTrades">–</div><div class="stat-label">Trades</div></div>
+          <div class="stat"><div class="stat-num" id="statAktiv">–</div><div class="stat-label">Aktive Anzeigen</div></div>
+          <div class="stat"><div class="stat-num" id="statRating">–</div><div class="stat-label">Bewertung</div></div>
+        </div>
+      </div>
+      <div class="field-hint" id="authHint" style="display:none; text-align:center; padding:10px 20px 0;"></div>
+
+      <div class="menu-section">
+        <div class="menu-row" data-plist="aktiv">
+          <div class="menu-icon" style="background:#F0B429;"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h10"/></svg></div>
+          <div class="menu-label">Meine Anzeigen</div>
+          <svg class="menu-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg>
+        </div>
+        <div class="menu-row" data-plist="archiv">
+          <div class="menu-icon" style="background:#8C7CFF;"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4z"/><path d="M4 7 6 3h12l2 4"/><path d="M9 11h6"/></svg></div>
+          <div class="menu-label">Abgeschlossene Trades</div>
+          <svg class="menu-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg>
+        </div>
+        <div class="menu-row" data-plist="favoriten">
+          <div class="menu-icon" style="background:#FF5DA2;"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20s-7-4.4-9.5-9A5.5 5.5 0 0 1 12 6a5.5 5.5 0 0 1 9.5 5c-2.5 4.6-9.5 9-9.5 9Z"/></svg></div>
+          <div class="menu-label">Favoriten</div>
+          <svg class="menu-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg>
+        </div>
+        <div class="menu-row" id="menuRatings">
+          <div class="menu-icon" style="background:#2FE0C4;"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.5 15 8.8l6.8.9-4.9 4.8 1.2 6.9L12 18l-6.1 3.4 1.2-6.9-4.9-4.8 6.8-.9Z"/></svg></div>
+          <div class="menu-label">Bewertungen</div>
+          <svg class="menu-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg>
+        </div>
+      </div>
+
+      <div class="menu-section">
+        <div class="menu-row plain" id="menuAgb"><div class="menu-label">AGB</div><svg class="menu-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg></div>
+        <div class="menu-row plain" id="menuDatenschutz"><div class="menu-label">Datenschutz</div><svg class="menu-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg></div>
+        <div class="menu-row plain" id="menuImpressum"><div class="menu-label">Impressum</div><svg class="menu-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg></div>
+        <div class="menu-row plain" id="menuInfo"><div class="menu-label">Informationen</div><svg class="menu-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg></div>
+      </div>
+
+      <div class="menu-section">
+        <div class="menu-row plain" id="menuAuthAction"><div class="menu-label" id="menuAuthLabel">Einloggen</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ PROFIL-UNTERLISTE (Anzeigen/Trades/Favoriten) ============ -->
+  <div class="view" id="view-profile-list">
+    <div class="subheader">
+      <button class="back-btn" id="profileListBackBtn">←</button>
+      <div><div class="subheader-title" id="profileListTitle">Anzeigen</div></div>
+    </div>
+    <div class="profile-scroll">
+      <div class="profile-list" id="profileList"></div>
+    </div>
+  </div>
+
+  <!-- ============ INSERAT ERSTELLEN ============ -->
+  <div class="view" id="view-create" style="position:relative;">
+    <div class="subheader">
+      <button class="back-btn" data-back="feed">←</button>
+      <div>
+        <div class="subheader-title">Neues Inserat</div>
+        <div class="subheader-sub">Sichtbar für Trader in deiner Nähe</div>
+      </div>
+    </div>
+    <div class="toast" id="toast">Anzeige veröffentlicht</div>
+    <div class="form-scroll">
+
+      <div class="field">
+        <div class="field-label">Fotos</div>
+        <div class="photo-row" id="photoRow"></div>
+        <input type="file" id="photoFileInput" accept="image/*" style="display:none;">
+        <div class="field-hint">Bis zu 3 Fotos. Gute Fotos beschleunigen den Tausch.</div>
+      </div>
+
+      <div class="field">
+        <div class="field-label">Was möchtest du tun?</div>
+        <div class="chip-select" id="formMode">
+          <div class="chip-opt active" data-mode="tausch">Tauschen</div>
+          <div class="chip-opt" data-mode="verkauf">Verkaufen</div>
+        </div>
+      </div>
+
+      <div class="field">
+        <div class="field-label">Spiel</div>
+        <div class="chip-select" id="formGame">
+          <div class="chip-opt active" data-game="pokemon">Pokémon TCG</div>
+          <div class="chip-opt" data-game="onepiece">One Piece TCG</div>
+          <div class="chip-opt" data-game="lorcana">Lorcana</div>
+          <div class="chip-opt" data-game="magic">Magic</div>
+          <div class="chip-opt" data-game="dragonball">Dragon Ball</div>
+          <div class="chip-opt" data-game="naruto">Naruto</div>
+          <div class="chip-opt" data-game="sonstige">Sonstiges</div>
+        </div>
+      </div>
+
+      <div class="field">
+        <div class="field-label">Unterkategorie</div>
+        <div class="chip-select" id="formCategory"></div>
+      </div>
+
+      <div class="field">
+        <div class="field-label">Titel</div>
+        <input class="text-input" id="formTitle" placeholder="z. B. Charizard ex 199/197">
+        <div class="field-error" id="errTitle">Bitte einen Titel eingeben.</div>
+      </div>
+
+      <div class="field">
+        <div class="field-label">Was du anbietest</div>
+        <textarea class="text-area" id="formHas" placeholder="Zustand, Auflage, Besonderheiten …"></textarea>
+        <div class="field-error" id="errHas">Bitte kurz beschreiben, was du anbietest.</div>
+      </div>
+
+      <div class="field" id="wantsField">
+        <div class="field-label">Was du im Tausch suchst</div>
+        <textarea class="text-area" id="formWants" placeholder="z. B. Umbreon VMAX Alt Art oder ähnlich wertvolle Karte"></textarea>
+        <div class="field-error" id="errWants">Bitte angeben, wonach du suchst.</div>
+      </div>
+
+      <div class="field" id="priceField" style="display:none;">
+        <div class="field-label">Preis</div>
+        <div class="price-input-wrap">
+          <input class="text-input" id="formPrice" type="number" min="0" placeholder="0">
+          <span class="price-suffix">€</span>
+        </div>
+        <div class="field-error" id="errPrice">Bitte einen Preis angeben.</div>
+      </div>
+
+      <div class="field">
+        <div class="field-label">Standort</div>
+        <input class="text-input" id="formOrt" value="Graz">
+        <div class="field-hint">Der genaue Treffpunkt wird erst beim Kontakt vereinbart.</div>
+      </div>
+
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-primary" style="width:100%;" id="publishBtn">Inserat veröffentlichen</button>
+    </div>
+  </div>
+
+  <!-- ============ HÄNDLERPROFIL ============ -->
+  <div class="view" id="view-shop">
+    <div class="subheader">
+      <button class="back-btn" id="shopBackBtn">←</button>
+      <div>
+        <div class="subheader-title">Händlerprofil</div>
+      </div>
+    </div>
+    <div class="profile-scroll" id="shopScroll"></div>
+  </div>
+
+  <!-- ============ KARTE ============ -->
+  <div class="view" id="view-map">
+    <div class="topbar" style="padding-bottom:16px;">
+      <div class="brand-row" style="margin-bottom:0;">
+        <div class="subheader-title">Karte</div>
+        <div class="locpill">📍 Graz, 5&nbsp;km</div>
+      </div>
+    </div>
+    <div class="map-wrap" id="mapWrap">
+      <svg class="map-svg" id="mapSvg" viewBox="0 0 380 560" preserveAspectRatio="xMidYMid slice"></svg>
+      <div class="map-card" id="mapCard"></div>
+    </div>
+  </div>
+
+  <!-- ============ SHARED BOTTOM NAV ============ -->
+  <div class="navbar" id="navbar">
+    <div class="navitem active" data-nav="feed">
+      <div class="navicon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10.8 12 4l8 6.8"/><path d="M6 9.6V19a1 1 0 0 0 1 1h3v-5.2h4V20h3a1 1 0 0 0 1-1V9.6"/></svg></div>
+      Start
+    </div>
+    <div class="navitem" data-nav="map">
+      <div class="navicon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4 4 6v14l5-2 6 2 5-2V4l-5 2-6-2Z"/><path d="M9 4v14M15 6v14"/></svg></div>
+      Karte
+    </div>
+    <div class="navitem" data-nav="chats">
+      <div class="navicon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.8A1.8 1.8 0 0 1 5.8 4h12.4A1.8 1.8 0 0 1 20 5.8v8.4a1.8 1.8 0 0 1-1.8 1.8H9.2L5 19.5v-3.5H5.8A1.8 1.8 0 0 1 4 14.2Z"/></svg>
+        <span class="navdot" id="chatDot"></span>
+      </div>
+      Chats
+    </div>
+    <div class="navitem" data-nav="profile">
+      <div class="navicon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8.3" r="3.3"/><path d="M5.2 19.4c1.15-3.35 3.9-5 6.8-5s5.65 1.65 6.8 5"/></svg></div>
+      Profil
+    </div>
+  </div>
+
+  <!-- ============ GENERISCHES SHEET / OVERFLOW-MENÜ ============ -->
+  <div class="overlay" id="sheetOverlay">
+    <div class="sheet" id="sheetContent"></div>
+  </div>
+  <div class="overflow-menu" id="overflowMenu"></div>
+  <div class="toast" id="globalToast" style="z-index:40;"></div>
+</div>
+
+<script>
+/* ---------------- Supabase-Anbindung ---------------- */
+// TODO: Hier deine echten Werte aus Supabase → Project Settings → API eintragen
+const SUPABASE_URL = 'https://jejeywhpqecxxfiythep.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImplamV5d2hwcWVjeHhmaXl0aGVwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkxMzI1NzQsImV4cCI6MjEwNDcwODU3NH0.cuiCnawDmqhPC_0u9jSLKstVCYWLDjY9qCmdBWjj68c';
+
+let supabaseClient = null;
+try {
+  if (SUPABASE_URL !== 'DEINE_PROJECT_URL' && SUPABASE_ANON_KEY !== 'DEIN_ANON_KEY') {
+    if (typeof supabase === 'undefined') {
+      console.warn('Supabase-Script konnte nicht geladen werden (Netzwerk/CDN-Problem). Die App läuft mit Demo-Daten weiter.');
+    } else {
+      supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    }
+  } else {
+    console.warn('Supabase noch nicht verbunden — trage echte URL/Key ein. Die App läuft bis dahin mit Demo-Daten weiter.');
+  }
+} catch (e) {
+  console.warn('Supabase-Verbindung fehlgeschlagen, App läuft mit Demo-Daten weiter:', e);
+}
+
+/* ---------------- Daten ---------------- */
+const CATEGORY_SETS = {
+  pokemon:   [['einzel','Einzelkarten'],['graded','Graded Slabs'],['display','Displays'],['booster','Booster'],['blister','Blister'],['sonstiges','Sonstiges']],
+  onepiece:  [['einzel','Einzelkarten'],['graded','Graded Slabs'],['display','Displays'],['booster','Booster'],['blister','Blister'],['sonstiges','Sonstiges']],
+  lorcana:   [['einzel','Einzelkarten'],['graded','Graded Slabs'],['display','Displays'],['booster','Booster'],['blister','Blister'],['sonstiges','Sonstiges']],
+  magic:     [['einzel','Einzelkarten'],['graded','Graded Slabs'],['booster','Booster'],['display','Displays'],['sammlerbox','Sammlerboxen'],['sonstiges','Sonstiges']],
+  dragonball:[['einzel','Einzelkarten'],['graded','Graded Slabs'],['display','Displays'],['booster','Booster'],['blister','Blister'],['sonstiges','Sonstiges']],
+  naruto:    [['einzel','Einzelkarten'],['display','Displays'],['booster','Booster'],['blister','Blister'],['sonstiges','Sonstiges']],
+  sonstige:  [['einzel','Einzelkarten'],['display','Displays'],['booster','Booster'],['sonstiges','Sonstiges']]
+};
+const GAME_LABELS = {
+  pokemon:'Pokémon TCG', onepiece:'One Piece TCG', lorcana:'Lorcana',
+  magic:'Magic: The Gathering', dragonball:'Dragon Ball TCG', naruto:'Naruto TCG', sonstige:'Sonstiges TCG'
+};
+const SHOPS = {
+  'Tobias R.': {
+    shopName:'Card Corner Graz',
+    address:'Sporgasse 12, 8010 Graz',
+    hours:'Mo–Fr 10–18 Uhr · Sa 10–14 Uhr',
+    desc:'Lokaler Kartenladen mit Fokus auf One Piece & Pokémon. Reservierte Artikel liegen 3 Tage bereit.'
+  },
+  'Peter M.': {
+    shopName:'Manabase Trading Graz',
+    address:'Annenstraße 34, 8020 Graz',
+    hours:'Di–Sa 11–19 Uhr',
+    desc:'Spezialist für Magic: The Gathering, Sammlerboxen und Einzelkarten.'
+  }
+};
+
+const listings = [
+  { id:'1', postedHoursAgo:2, game:'pokemon', category:'einzel', mode:'tausch', status:'aktiv', mine:false,
+    title:'Charizard ex 199/197 (Obsidian Flames)',
+    thumbGrad:'linear-gradient(160deg,#E1531F,#B5432E)', thumbLabel:'CHZ',
+    has:'Charizard ex Special Illustration Rare, NM', wants:'Suche Umbreon VMAX Alt Art oder gutes Angebot',
+    ort:'Graz · 1,2 km', zeit:'vor 2 Std', marketRange:'135–160 €',
+    seller:{name:'Lena K.', rating:'4.8★ · 22 Trades', verified:true} },
+  { id:'2', postedHoursAgo:5, game:'onepiece', category:'einzel', mode:'tausch', status:'aktiv', mine:true,
+    title:'Shanks Leader-Karte (OP-01)',
+    thumbGrad:'linear-gradient(160deg,#2E5240,#1B3A2B)', thumbLabel:'OP1',
+    has:'Shanks OP01-120 Parallel, top Zustand', wants:'Suche Luffy Leader oder Kaido Alt Art', marketRange:'38–45 €',
+    ort:'Graz · 2,8 km', zeit:'vor 5 Std',
+    seller:{name:'Max J.', rating:'4.9★ · 14 Trades', verified:true} },
+  { id:'3', postedHoursAgo:24, game:'pokemon', category:'display', mode:'verkauf', status:'aktiv', mine:true, boosted:true,
+    title:'Display 151 (36 Booster, versiegelt)',
+    thumbGrad:'linear-gradient(160deg,#EFB13B,#E1531F)', thumbLabel:'151',
+    has:'Original versiegelt, deutsche Ausgabe', wants:null, preis:'145 €', marketRange:'150–165 €',
+    ort:'Kalsdorf · 6,4 km', zeit:'vor 1 Tag',
+    seller:{name:'Max J.', rating:'4.9★ · 14 Trades'} },
+  { id:'4', postedHoursAgo:24, game:'onepiece', category:'booster', mode:'verkauf', status:'aktiv', mine:false,
+    title:'Booster-Box Two Legends (OP-08)',
+    thumbGrad:'linear-gradient(160deg,#1B3A2B,#2E5240)', thumbLabel:'OP8',
+    has:'Versiegelt, EN Version, 24 Packs', wants:null, preis:'98 €',
+    ort:'Graz · 3,1 km', zeit:'vor 1 Tag',
+    seller:{name:'Tobias R.', rating:'4.6★ · 9 Trades', type:'shop'} },
+  { id:'5', postedHoursAgo:48, game:'pokemon', category:'einzel', mode:'tausch', status:'aktiv', mine:false,
+    title:'3× Pikachu Promo Karten Bundle',
+    thumbGrad:'linear-gradient(160deg,#EFB13B,#F6C86B)', thumbLabel:'PIK',
+    has:'3 verschiedene Pikachu Promos, NM–LP', wants:'Offen für Tauschvorschläge, auch Displays',
+    ort:'Seiersberg · 4,0 km', zeit:'vor 2 Tagen',
+    seller:{name:'Anna S.', rating:'5.0★ · 31 Trades'} },
+  { id:'8', postedHoursAgo:6, game:'pokemon', category:'graded', mode:'tausch', status:'aktiv', mine:false,
+    title:'Blastoise Base Set PSA 9 (Graded Slab)',
+    thumbGrad:'linear-gradient(160deg,#3B6E52,#1B3A2B)', thumbLabel:'PSA',
+    has:'PSA 9, Base Set 1999, Slab einwandfrei', wants:'Suche Venusaur PSA 9+ oder gleichwertiges Angebot',
+    ort:'Graz · 2,1 km', zeit:'vor 6 Std',
+    seller:{name:'David P.', rating:'4.7★ · 11 Trades'} },
+  { id:'9', postedHoursAgo:3, game:'lorcana', category:'einzel', mode:'tausch', status:'aktiv', mine:false,
+    title:'Elsa – Snow Queen (Enchanted Rarity)',
+    thumbGrad:'linear-gradient(160deg,#6B4E9C,#3D2B63)', thumbLabel:'ELS',
+    has:'Elsa Enchanted, NM, aus Rise of the Floodborn', wants:'Suche Mickey Mouse Enchanted oder Angebot', marketRange:'95–115 €',
+    ort:'Graz · 3,4 km', zeit:'vor 3 Std',
+    seller:{name:'Julia F.', rating:'4.9★ · 8 Trades'} },
+  { id:'10', postedHoursAgo:24, game:'lorcana', category:'booster', mode:'verkauf', status:'aktiv', mine:false,
+    title:'Booster Pack Set – Into the Inklands (4er Pack)',
+    thumbGrad:'linear-gradient(160deg,#8A6BC9,#4A3576)', thumbLabel:'LOR',
+    has:'4 versiegelte Booster Packs', wants:null, preis:'26 €',
+    ort:'Leibnitz · 12 km', zeit:'vor 1 Tag',
+    seller:{name:'Nina H.', rating:'4.8★ · 6 Trades'} },
+  { id:'11', postedHoursAgo:4, game:'magic', category:'sammlerbox', mode:'verkauf', status:'aktiv', mine:false,
+    title:'Sammlerbox Modern Horizons 3',
+    thumbGrad:'linear-gradient(160deg,#7A1F2B,#2A1015)', thumbLabel:'MTG',
+    has:'Versiegelte Collector Booster Box, EN', wants:null, preis:'260 €',
+    ort:'Graz · 5,0 km', zeit:'vor 4 Std',
+    seller:{name:'Peter M.', rating:'4.9★ · 19 Trades', type:'shop'} },
+  { id:'12', postedHoursAgo:8, game:'magic', category:'einzel', mode:'tausch', status:'aktiv', mine:false,
+    title:'Ragavan, Nimble Pilferer (Foil)',
+    thumbGrad:'linear-gradient(160deg,#9A2E3C,#43151C)', thumbLabel:'RAG',
+    has:'Ragavan Foil, NM, aus Modern Horizons 2', wants:'Suche Solitude oder Fury Foil im Tausch', marketRange:'55–68 €',
+    ort:'Graz · 1,6 km', zeit:'vor 8 Std',
+    seller:{name:'Fabian H.', rating:'4.7★ · 27 Trades'} },
+  { id:'13', postedHoursAgo:48, game:'dragonball', category:'display', mode:'verkauf', status:'aktiv', mine:false,
+    title:'Display Fusion World FB03 (versiegelt)',
+    thumbGrad:'linear-gradient(160deg,#F58B3C,#C1401D)', thumbLabel:'DBS',
+    has:'Original versiegelt, 24 Booster', wants:null, preis:'85 €',
+    ort:'Kalsdorf · 6,9 km', zeit:'vor 2 Tagen',
+    seller:{name:'Marco T.', rating:'4.5★ · 5 Trades'} },
+  { id:'14', postedHoursAgo:24, game:'dragonball', category:'einzel', mode:'tausch', status:'aktiv', mine:false,
+    title:'Son Goku SR Leader-Karte',
+    thumbGrad:'linear-gradient(160deg,#F2A93B,#C1401D)', thumbLabel:'GOK',
+    has:'Son Goku SR, NM, Fusion World', wants:'Suche Vegeta SR oder Broly Alt Art', marketRange:'18–24 €',
+    ort:'Graz · 2,3 km', zeit:'vor 1 Tag',
+    seller:{name:'Elena B.', rating:'4.8★ · 13 Trades'} },
+  { id:'15', postedHoursAgo:5, game:'naruto', category:'booster', mode:'verkauf', status:'aktiv', mine:false,
+    title:'Booster Box Naruto Kayou Tier 4 (versiegelt)',
+    thumbGrad:'linear-gradient(160deg,#EB8A3E,#232323)', thumbLabel:'NAR',
+    has:'Versiegelte Box, 36 Packs', wants:null, preis:'110 €',
+    ort:'Graz · 4,4 km', zeit:'vor 5 Std',
+    seller:{name:'Kevin S.', rating:'4.6★ · 7 Trades'} },
+  { id:'16', postedHoursAgo:48, game:'naruto', category:'einzel', mode:'tausch', status:'aktiv', mine:false,
+    title:'Itachi Uchiha SP Karte',
+    thumbGrad:'linear-gradient(160deg,#D9701F,#231F20)', thumbLabel:'ITA',
+    has:'Itachi SP, top Zustand', wants:'Suche Kakashi SP oder Sasuke Alt Art',
+    ort:'Seiersberg · 3,8 km', zeit:'vor 2 Tagen',
+    seller:{name:'Robert K.', rating:'4.7★ · 10 Trades'} },
+  { id:'6', postedHoursAgo:216, game:'pokemon', category:'einzel', mode:'tausch', status:'done', mine:true, rated:false,
+    title:'Blastoise ex Alt Art gegen Venusaur ex',
+    thumbGrad:'linear-gradient(160deg,#2E5240,#1B3A2B)', thumbLabel:'BLA',
+    has:'Blastoise ex Alt Art, NM', wants:'—getauscht mit Fabian H.—',
+    ort:'Graz · 0,8 km', zeit:'vor 9 Tagen',
+    seller:{name:'Max J.', rating:'4.9★ · 14 Trades'} },
+  { id:'7', postedHoursAgo:504, game:'onepiece', category:'einzel', mode:'verkauf', status:'done', mine:true, rated:true,
+    title:'Nami Parallel (OP-02)',
+    thumbGrad:'linear-gradient(160deg,#EFB13B,#E1531F)', thumbLabel:'NAM',
+    has:'Nami Parallel, LP', wants:null, preis:'22 €',
+    ort:'Graz · 1,0 km', zeit:'vor 3 Wochen',
+    seller:{name:'Max J.', rating:'4.9★ · 14 Trades'} }
+];
+
+const conversations = [
+  { id:'c1', listingId:1, partner:'Lena K.', sub:'Zu: Charizard ex 199/197', unread:true, time:'14:02',
+    messages:[
+      {from:'them', text:'Hey! Wäre der Charizard noch für einen Tausch mit meinem Umbreon VMAX verfügbar?', time:'13:40'},
+      {from:'me', text:'Ja klar, der ist noch da 🙂 Passt Samstag am Hauptplatz?', time:'13:58'},
+      {from:'them', text:'Perfekt, sagen wir 15 Uhr?', time:'14:02'}
+    ] },
+  { id:'c2', listingId:2, partner:'Timo B.', sub:'Zu: Shanks Leader-Karte', unread:true, time:'11:15',
+    messages:[
+      {from:'them', text:'Hättest du Interesse an meinem Luffy Leader im Tausch?', time:'11:15'}
+    ] },
+  { id:'c3', listingId:3, partner:'Sarah W.', sub:'Zu: Display 151', unread:false, time:'Gestern',
+    messages:[
+      {from:'them', text:'Ist der Preis verhandelbar?', time:'Gestern, 18:20'},
+      {from:'me', text:'Ein kleines bisschen, ja. Was schwebt dir vor?', time:'Gestern, 19:05'}
+    ] },
+  { id:'c4', listingId:7, partner:'Fabian H.', sub:'Zu: Nami Parallel', unread:false, time:'vor 3 Wochen',
+    messages:[
+      {from:'them', text:'Danke fürs unkomplizierte Treffen, Karte ist top!', time:'vor 3 Wochen'},
+      {from:'me', text:'Gerne, hat mich gefreut!', time:'vor 3 Wochen'}
+    ] }
+];
+
+let activeMode='alle', activeGame='alle', activeCategory='alle', activeSort='relevanz', currentListingId=null, currentChatId=null, activePTab='aktiv';
+let favorites = new Set();
+let plusUnlocked = false;
+let radiusKm = 5;
+const ME = {name:'Max J.', rating:'4.9★ · 14 Trades', verified:true};
+
+/* ---------------- Navigation ---------------- */
+function showView(name){
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  document.getElementById('view-'+name).classList.add('active');
+  document.querySelectorAll('.navitem').forEach(n=>n.classList.toggle('active', n.dataset.nav===name));
+  document.getElementById('navbar').style.display = ['feed','map','chats','profile'].includes(name) ? 'flex' : 'none';
+  if(name==='map') renderMap();
+}
+document.querySelectorAll('.navitem').forEach(n=>n.addEventListener('click', ()=>showView(n.dataset.nav)));
+document.querySelectorAll('[data-back]').forEach(b=>b.addEventListener('click', ()=>showView(b.dataset.back)));
+
+/* ---------------- Helpers ---------------- */
+function gameLabel(g){return GAME_LABELS[g]||g;}
+function initials(name){return name.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();}
+function thumbHTML(l, extraClass=''){
+  if(l.photoUrl){
+    return `<div class="thumb ${extraClass}" style="background-image:url('${l.photoUrl}'); background-size:cover; background-position:center;"></div>`;
+  }
+  return `<div class="thumb ${extraClass}" style="background:${l.thumbGrad}">${l.thumbLabel}</div>`;
+}
+function getDistanceKm(l){
+  const m = l.ort.match(/([\d,.]+)\s*km/);
+  return m ? parseFloat(m[1].replace(',', '.')) : 0;
+}
+function categoryLabel(game, cat){
+  const set = CATEGORY_SETS[game];
+  if(!set || !cat) return '';
+  const found = set.find(c=>c[0]===cat);
+  return found ? found[1] : '';
+}
+function wireListingCards(container){
+  container.querySelectorAll('.listing').forEach(el=>{
+    el.addEventListener('click', ()=>openDetail(el.dataset.id));
+  });
+  container.querySelectorAll('[data-favid]').forEach(btn=>{
+    btn.addEventListener('click', (e)=>{
+      e.stopPropagation();
+      toggleFavorite(btn.dataset.favid, btn);
+    });
+  });
+  container.querySelectorAll('[data-boostid]').forEach(btn=>{
+    btn.addEventListener('click', (e)=>{
+      e.stopPropagation();
+      openBoostSheet(btn.dataset.boostid);
+    });
+  });
+  container.querySelectorAll('[data-rateid]').forEach(btn=>{
+    btn.addEventListener('click', (e)=>{
+      e.stopPropagation();
+      openRatingSheet(btn.dataset.rateid);
+    });
+  });
+}
+function toggleFavorite(id, btnEl){
+  if(favorites.has(id)) favorites.delete(id); else favorites.add(id);
+  if(btnEl) btnEl.classList.toggle('active', favorites.has(id));
+  if(document.getElementById('view-profile-list').classList.contains('active') && activePTab==='favoriten') renderProfile();
+}
+
+function listingCardHTML(l, opts={}){
+  const showStatus = opts.showStatus;
+  const showFav = !l.mine;
+  return `
+    <div class="listing ${l.boosted?'boosted':''} ${showFav?'has-fav':''}" data-id="${l.id}">
+      ${thumbHTML(l)}
+      ${l.boosted ? `<div class="boost-tag"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2 9 9l-7 1 5 5-1 7 6-3 6 3-1-7 5-5-7-1Z"/></svg>Top</div>` : ''}
+      ${showFav ? `<button class="fav-btn ${favorites.has(l.id)?'active':''}" data-favid="${l.id}">
+        <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20s-7-4.4-9.5-9A5.5 5.5 0 0 1 12 6a5.5 5.5 0 0 1 9.5 5c-2.5 4.6-9.5 9-9.5 9Z"/></svg>
+      </button>` : ''}
+      <div class="listing-body">
+        <div class="listing-top">
+          <div>
+            <div class="listing-title">${l.title}</div>
+            <div class="listing-game">${gameLabel(l.game)}${categoryLabel(l.game,l.category) ? ' · '+categoryLabel(l.game,l.category) : ''}</div>
+          </div>
+          ${showStatus
+            ? `<div class="tag-status ${l.status==='aktiv'?'aktiv':'done'}">${l.status==='aktiv'?'Aktiv':'Erledigt'}</div>`
+            : `<div class="tag-mode ${l.mode==='tausch'?'tausch':'verkauf'}">${l.mode==='tausch'?'Tausch':'Verkauf'}</div>`
+          }
+        </div>
+        <div class="trade-row"><span class="trade-label has">Hat:</span><span>${l.has}</span></div>
+        ${l.wants ? `<div class="trade-row"><span class="trade-label wants">Sucht:</span><span>${l.wants}</span></div>` : ''}
+        <div class="listing-foot">
+          <div class="meta">📍 ${l.ort} · ${l.zeit}</div>
+          ${l.preis ? `<div class="price">${l.preis}</div>` : ''}
+        </div>
+        ${showStatus && l.status==='aktiv' ? `
+          <div class="listing-mini-actions">
+            ${l.boosted
+              ? `<button class="mini-btn gold" disabled>★ Bereits hervorgehoben</button>`
+              : `<button class="mini-btn gold" data-boostid="${l.id}">Anzeige hervorheben</button>`}
+          </div>` : ''}
+        ${showStatus && l.status==='done' && !l.rated ? `
+          <div class="listing-mini-actions">
+            <button class="mini-btn" data-rateid="${l.id}">Trade bewerten</button>
+          </div>` : ''}
+      </div>
+    </div>`;
+}
+
+/* ---------------- Feed ---------------- */
+function renderFeed(){
+  const feed = document.getElementById('feed');
+  const q = document.getElementById('searchInput').value.trim().toLowerCase();
+  let filtered = listings.filter(l=>{
+    if(l.status!=='aktiv') return false;
+    if(activeMode!=='alle' && l.mode!==activeMode) return false;
+    if(activeGame!=='alle' && l.game!==activeGame) return false;
+    if(activeGame!=='alle' && activeCategory!=='alle' && l.category!==activeCategory) return false;
+    if(getDistanceKm(l) > radiusKm) return false;
+    if(q && !l.title.toLowerCase().includes(q)) return false;
+    return true;
+  });
+  if(activeSort==='neu'){
+    filtered = filtered.slice().sort((a,b)=>a.postedHoursAgo-b.postedHoursAgo);
+  } else if(activeSort==='alt'){
+    filtered = filtered.slice().sort((a,b)=>b.postedHoursAgo-a.postedHoursAgo);
+  } else {
+    filtered = filtered.slice().sort((a,b)=>(b.boosted?1:0)-(a.boosted?1:0));
+  }
+  feed.innerHTML = filtered.length
+    ? filtered.map(l=>listingCardHTML(l)).join('')
+    : `<div class="empty-state">Keine Treffer. Anderen Filter, Umkreis oder Suchbegriff probieren.</div>`;
+  wireListingCards(feed);
+}
+document.querySelectorAll('.mode-btn').forEach(btn=>btn.addEventListener('click', ()=>{
+  document.querySelectorAll('.mode-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active'); activeMode=btn.dataset.mode; renderFeed();
+}));
+
+function renderCategoryFilters(){
+  const wrap = document.getElementById('categoryFilters');
+  if(activeGame==='alle' || !CATEGORY_SETS[activeGame]){
+    wrap.style.display = 'none';
+    wrap.innerHTML = '';
+    return;
+  }
+  wrap.style.display = 'flex';
+  const cats = CATEGORY_SETS[activeGame];
+  wrap.innerHTML = `<div class="chip active" data-cat="alle">Alle Unterkategorien</div>` +
+    cats.map(([key,label])=>`<div class="chip" data-cat="${key}">${label}</div>`).join('');
+  wrap.querySelectorAll('.chip').forEach(chip=>chip.addEventListener('click', ()=>{
+    wrap.querySelectorAll('.chip').forEach(c=>c.classList.remove('active'));
+    chip.classList.add('active');
+    activeCategory = chip.dataset.cat;
+    renderFeed();
+  }));
+}
+
+document.querySelectorAll('#gameFilters .chip').forEach(chip=>chip.addEventListener('click', ()=>{
+  document.querySelectorAll('#gameFilters .chip').forEach(c=>c.classList.remove('active'));
+  chip.classList.add('active');
+  activeGame = chip.dataset.game;
+  activeCategory = 'alle';
+  renderCategoryFilters();
+  renderFeed();
+}));
+document.getElementById('searchInput').addEventListener('input', renderFeed);
+
+/* ---------------- Sortierung ---------------- */
+const sortBtn = document.getElementById('sortBtn');
+const sortMenu = document.getElementById('sortMenu');
+const sortLabels = {relevanz:'Relevanz', neu:'Neueste zuerst', alt:'Älteste zuerst'};
+sortBtn.addEventListener('click', (e)=>{
+  e.stopPropagation();
+  sortMenu.classList.toggle('open');
+  sortBtn.classList.toggle('open');
+});
+sortMenu.querySelectorAll('.sort-opt').forEach(opt=>opt.addEventListener('click', ()=>{
+  sortMenu.querySelectorAll('.sort-opt').forEach(o=>o.classList.remove('active'));
+  opt.classList.add('active');
+  activeSort = opt.dataset.sort;
+  document.getElementById('sortBtnLabel').textContent = sortLabels[activeSort];
+  sortMenu.classList.remove('open');
+  sortBtn.classList.remove('open');
+  renderFeed();
+}));
+document.addEventListener('click', ()=>{
+  sortMenu.classList.remove('open');
+  sortBtn.classList.remove('open');
+});
+
+/* ---------------- Umkreis ---------------- */
+const locPill = document.getElementById('locPill');
+const radiusPanel = document.getElementById('radiusPanel');
+const radiusSlider = document.getElementById('radiusSlider');
+locPill.addEventListener('click', (e)=>{
+  e.stopPropagation();
+  radiusPanel.classList.toggle('open');
+});
+radiusSlider.addEventListener('input', ()=>{
+  radiusKm = parseInt(radiusSlider.value);
+  document.getElementById('radiusValue').textContent = radiusKm + ' km';
+  document.getElementById('locLabel').textContent = 'Graz, ' + radiusKm + ' km';
+  renderFeed();
+});
+document.addEventListener('click', (e)=>{
+  if(!radiusPanel.contains(e.target)) radiusPanel.classList.remove('open');
+});
+
+/* ---------------- Listing Detail ---------------- */
+function sellerBadgeHTML(seller){
+  if(seller.type==='shop'){
+    return `<span class="shop-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 9h16l-1.5-4h-13L4 9Z"/><path d="M5 9v10h14V9"/></svg>Händler</span>`;
+  }
+  if(seller.verified){
+    return `<span class="verified-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M5 12.5 9.5 17 19 7"/></svg>Verifiziert</span>`;
+  }
+  return '';
+}
+const CARDMARKET_SLUGS = {
+  pokemon:'Pokemon', onepiece:'OnePiece', lorcana:'Lorcana', magic:'Magic', dragonball:'DragonBallSuper'
+};
+function cardmarketUrl(l){
+  const slug = CARDMARKET_SLUGS[l.game];
+  if(!slug) return null;
+  const term = l.title.split('(')[0].trim();
+  return `https://www.cardmarket.com/en/${slug}/Products/Search?searchString=${encodeURIComponent(term)}`;
+}
+function marketBlockHTML(l){
+  const url = cardmarketUrl(l);
+  const cmIcon = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7M9 7h8v8"/></svg>`;
+  return `
+    <div class="detail-block market-block">
+      <div class="detail-block-label has" style="display:flex; align-items:center; justify-content:space-between;">
+        <span>Marktpreis</span>
+        ${url ? `<span class="cm-wordmark">Cardmarket</span>` : ''}
+      </div>
+      ${l.marketRange ? `
+        <div class="price-teaser">
+          <div class="market-value">${l.marketRange}</div>
+          ${!plusUnlocked ? `<div class="market-lock" id="marketLockBtn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="10" width="14" height="9" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
+            <div class="market-lock-text">Mit traderei Plus freischalten</div>
+          </div>` : ''}
+        </div>` : `<div class="detail-block-text" style="color:var(--muted); margin-top:4px;">Für diesen Artikel liegt noch keine Preisschätzung vor.</div>`}
+      ${url
+        ? `<a href="${url}" target="_blank" rel="noopener noreferrer" class="cm-link-btn">${cmIcon}Auf Cardmarket ansehen</a>`
+        : `<div class="field-hint" style="margin-top:8px;">${gameLabel(l.game)} wird aktuell nicht auf Cardmarket geführt.</div>`
+      }
+    </div>`;
+}
+function openDetail(id){
+  currentListingId = id;
+  const l = listings.find(x=>String(x.id)===String(id));
+  const isMine = l.mine;
+  document.getElementById('detailScroll').innerHTML = `
+    <div style="position:relative;">
+      ${thumbHTML(l, 'lg')}
+      <button class="detail-fav ${favorites.has(l.id)?'active':''}" id="detailFavBtn">
+        <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20s-7-4.4-9.5-9A5.5 5.5 0 0 1 12 6a5.5 5.5 0 0 1 9.5 5c-2.5 4.6-9.5 9-9.5 9Z"/></svg>
+      </button>
+      ${l.boosted ? `<div class="boost-tag"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2 9 9l-7 1 5 5-1 7 6-3 6 3-1-7 5-5-7-1Z"/></svg>Hervorgehoben</div>` : ''}
+    </div>
+    <div class="detail-title">${l.title}</div>
+    <div class="detail-meta-row">
+      <div class="tag-mode ${l.mode==='tausch'?'tausch':'verkauf'}">${l.mode==='tausch'?'Tausch':'Verkauf'}</div>
+      <div class="meta">📍 ${l.ort} · ${l.zeit}</div>
+    </div>
+    <div class="detail-block">
+      <div class="detail-block-label has">Hat</div>
+      <div class="detail-block-text">${l.has}</div>
+    </div>
+    ${l.wants ? `<div class="detail-block"><div class="detail-block-label wants">Sucht</div><div class="detail-block-text">${l.wants}</div></div>` : ''}
+    ${l.preis ? `<div class="detail-block"><div class="detail-block-label has">Preis</div><div class="detail-block-text price" style="font-size:16px;">${l.preis}</div></div>` : ''}
+    ${marketBlockHTML(l)}
+    <div class="seller-row ${l.seller.type==='shop'?'clickable':''}" id="sellerRow">
+      <div class="avatar">${initials(l.seller.name)}</div>
+      <div>
+        <div class="seller-name">${l.seller.name}${sellerBadgeHTML(l.seller)}</div>
+        <div class="seller-rating">${l.seller.rating}</div>
+      </div>
+      ${l.seller.type==='shop' ? `<svg class="seller-row-chevron" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg>` : ''}
+    </div>
+  `;
+  document.getElementById('detailFavBtn').addEventListener('click', ()=>toggleFavorite(l.id, document.getElementById('detailFavBtn')));
+  const lockBtn = document.getElementById('marketLockBtn');
+  if(lockBtn) lockBtn.addEventListener('click', openPlusSheet);
+  if(l.seller.type==='shop'){
+    document.getElementById('sellerRow').addEventListener('click', ()=>openShopProfile(l.seller.name));
+  }
+
+  const actions = document.querySelector('#view-detail .detail-actions');
+  if(actions) actions.remove();
+  if(!isMine){
+    const bar = document.createElement('div');
+    bar.className = 'detail-actions';
+    const isShop = l.seller.type==='shop';
+    bar.innerHTML = `
+      <button class="btn btn-secondary" id="detailMsgBtn">Nachricht senden</button>
+      ${isShop
+        ? `<button class="btn btn-primary" id="detailOfferBtn">Reservierung anfragen</button>`
+        : l.mode==='tausch' ? `<button class="btn btn-primary" id="detailOfferBtn">Tausch vorschlagen</button>` : `<button class="btn btn-primary" id="detailOfferBtn">Kaufen</button>`}
+    `;
+    document.getElementById('view-detail').appendChild(bar);
+    document.getElementById('detailMsgBtn').addEventListener('click', ()=>openOrCreateChat(l));
+    document.getElementById('detailOfferBtn').addEventListener('click', ()=>{
+      if(isShop) openReserveSheet(l);
+      else if(l.mode==='tausch') openTradeOfferSheet(l);
+      else openOrCreateChat(l);
+    });
+  }
+  document.getElementById('detailOverflowBtn').onclick = (e)=>{
+    e.stopPropagation();
+    openOverflowMenu(document.getElementById('detailOverflowBtn'), [
+      {label:'Nutzer melden', action:()=>reportUser(l.seller.name)},
+      {label:'Nutzer blockieren', action:()=>blockUser(l.seller.name), danger:true}
+    ]);
+  };
+  showView('detail');
+}
+
+function openOrCreateChat(listing){
+  let convo = conversations.find(c=>c.listingId===listing.id && c.partner===listing.seller.name);
+  if(!convo){
+    convo = { id:'c'+Date.now(), listingId:listing.id, partner:listing.seller.name,
+      sub:'Zu: '+listing.title, unread:false, time:'jetzt', messages:[] };
+    conversations.unshift(convo);
+  }
+  openChat(convo.id);
+}
+
+/* ---------------- Chats ---------------- */
+function previewText(m){
+  if(!m) return 'Neue Unterhaltung';
+  if(m.type==='offer') return '🔁 Tauschvorschlag gesendet';
+  if(m.type==='reserve') return m.status==='pending' ? '⏳ Reservierungsanfrage gesendet' : '📦 Reservierung angenommen';
+  if(m.type==='system') return m.text;
+  return m.text;
+}
+function renderChatlist(){
+  const el = document.getElementById('chatlist');
+  el.innerHTML = conversations.map(c=>`
+    <div class="chat-item" data-id="${c.id}">
+      <div class="avatar">${initials(c.partner)}</div>
+      <div class="chat-item-body">
+        <div class="chat-item-top">
+          <div class="chat-name">${c.partner}</div>
+          <div class="chat-time">${c.time}</div>
+        </div>
+        <div class="chat-context">${c.sub}</div>
+        <div class="chat-preview ${c.unread?'unread':''}">${previewText(c.messages[c.messages.length-1])}</div>
+      </div>
+      ${c.unread ? '<div class="unread-dot"></div>' : ''}
+    </div>
+  `).join('');
+  el.querySelectorAll('.chat-item').forEach(item=>item.addEventListener('click', ()=>openChat(item.dataset.id)));
+  updateChatDot();
+}
+function updateChatDot(){
+  document.getElementById('chatDot').style.display = conversations.some(c=>c.unread) ? 'block' : 'none';
+}
+
+function openChat(id){
+  currentChatId = id;
+  const c = conversations.find(x=>x.id===id);
+  c.unread = false;
+  const listing = listings.find(l=>String(l.id)===String(c.listingId));
+  document.getElementById('chatPartnerName').textContent = c.partner;
+  document.getElementById('chatPartnerSub').textContent = listing ? listing.seller.rating : '';
+  document.getElementById('chatContext').innerHTML = listing ? `
+    ${thumbHTML(listing)}
+    <div>
+      <div class="context-card-title">${listing.title}</div>
+      <div class="context-card-sub">${listing.mode==='tausch'?'Tauschangebot':'Verkaufsangebot'}${listing.preis ? ' · '+listing.preis : ''}</div>
+    </div>` : '';
+  renderMessages(c);
+  document.getElementById('chatOverflowBtn').onclick = (e)=>{
+    e.stopPropagation();
+    openOverflowMenu(document.getElementById('chatOverflowBtn'), [
+      {label:'Nutzer melden', action:()=>reportUser(c.partner)},
+      {label:'Nutzer blockieren', action:()=>blockUser(c.partner), danger:true}
+    ]);
+  };
+  showView('chat');
+}
+function renderMessages(c){
+  const el = document.getElementById('messages');
+  el.innerHTML = c.messages.map(m=>{
+    if(m.type==='system'){
+      return `<div class="system-bubble">${m.text}</div>`;
+    }
+    if(m.type==='offer'){
+      return `<div class="offer-bubble">
+        <div class="offer-title">Tauschvorschlag</div>
+        <div class="offer-row">${thumbHTML(m.mine)}<span>Dein Angebot: ${m.mine.title}</span></div>
+        <div class="offer-row">${thumbHTML(m.theirs)}<span>Gegen: ${m.theirs.title}</span></div>
+        <div class="bubble-time" style="color:#CBDBCF;">${m.time}</div>
+      </div>`;
+    }
+    if(m.type==='reserve'){
+      const statusLabel = {pending:'⏳ Ausstehend', accepted:'✓ Angenommen', declined:'✕ Abgelehnt'}[m.status];
+      return `<div class="reserve-bubble">
+        <div class="offer-title">Reservierungsanfrage</div>
+        <div class="offer-row">${thumbHTML(m.listing)}<span>${m.listing.title}</span></div>
+        <div class="offer-row" style="margin-top:4px;"><span>📍 Abholung: ${m.shop.address}</span></div>
+        <div class="offer-row"><span>🕐 ${m.shop.hours}</span></div>
+        <div class="reserve-status ${m.status}">${statusLabel}</div>
+        <div class="bubble-time" style="color:#6E5A1C;">${m.time}</div>
+      </div>`;
+    }
+    return `<div class="bubble ${m.from==='me'?'me':'them'}">${m.text}<div class="bubble-time">${m.time}</div></div>`;
+  }).join('') || `<div class="empty-state">Schreib die erste Nachricht.</div>`;
+  el.scrollTop = el.scrollHeight;
+}
+document.getElementById('sendBtn').addEventListener('click', sendMessage);
+document.getElementById('msgInput').addEventListener('keydown', e=>{ if(e.key==='Enter') sendMessage(); });
+function sendMessage(){
+  const input = document.getElementById('msgInput');
+  const text = input.value.trim();
+  if(!text || !currentChatId) return;
+  const c = conversations.find(x=>x.id===currentChatId);
+  c.messages.push({from:'me', text, time:'jetzt'});
+  c.time = 'jetzt';
+  input.value='';
+  renderMessages(c);
+}
+
+/* ---------------- Sicherer Treffpunkt (Quick Action) ---------------- */
+const SAFE_SPOTS = [
+  {name:'Hauptbahnhof Graz', sub:'Belebter, öffentlicher Ort'},
+  {name:'Comic- & Cardshop Graz Innenstadt', sub:'Fachhändler, oft neutral bevorzugt'},
+  {name:'Café am Hauptplatz', sub:'Drinnen, gut einsehbar'}
+];
+document.getElementById('meetupChip').addEventListener('click', ()=>{
+  openSheet(`
+    <button class="sheet-close" onclick="closeSheet()">✕</button>
+    <div class="sheet-title">Sicheren Treffpunkt vorschlagen</div>
+    <div class="sheet-sub">Öffentliche, belebte Orte sind für beide Seiten sicherer als eine Privatadresse.</div>
+    ${SAFE_SPOTS.map((s,i)=>`
+      <div class="meetup-opt" data-spot="${i}">
+        <div class="meetup-opt-icon"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21s-6.5-5.2-8.5-9.2A5.5 5.5 0 0 1 12 4a5.5 5.5 0 0 1 8.5 7.8C18.5 15.8 12 21 12 21Z"/><circle cx="12" cy="10.5" r="2"/></svg></div>
+        <div><div class="meetup-opt-title">${s.name}</div><div class="meetup-opt-sub">${s.sub}</div></div>
+      </div>`).join('')}
+  `);
+  document.querySelectorAll('.meetup-opt').forEach(el=>el.addEventListener('click', ()=>{
+    const spot = SAFE_SPOTS[el.dataset.spot];
+    const c = conversations.find(x=>x.id===currentChatId);
+    c.messages.push({from:'me', text:'Wie wäre es mit „' + spot.name + '" als Treffpunkt? '+spot.sub+'.', time:'jetzt'});
+    c.time = 'jetzt';
+    renderMessages(c);
+    closeSheet();
+  }));
+});
+
+/* ---------------- Profile ---------------- */
+function renderProfile(){
+  const list = document.getElementById('profileList');
+  let items;
+  if(activePTab==='favoriten'){
+    items = listings.filter(l=>favorites.has(l.id));
+  } else {
+    items = listings.filter(l=>l.mine && (activePTab==='aktiv' ? l.status==='aktiv' : l.status==='done'));
+  }
+  const emptyMsg = activePTab==='aktiv' ? 'Noch keine aktiven Anzeigen.'
+    : activePTab==='archiv' ? 'Noch keine abgeschlossenen Trades.'
+    : 'Noch keine Favoriten gespeichert.';
+  list.innerHTML = items.length
+    ? items.map(l=>listingCardHTML(l, {showStatus: activePTab!=='favoriten'})).join('')
+    : `<div class="empty-state">${emptyMsg}</div>`;
+  wireListingCards(list);
+}
+const PLIST_TITLES = {aktiv:'Meine Anzeigen', archiv:'Abgeschlossene Trades', favoriten:'Favoriten'};
+function openProfileList(kind){
+  activePTab = kind;
+  document.getElementById('profileListTitle').textContent = PLIST_TITLES[kind] || 'Liste';
+  renderProfile();
+  showView('profile-list');
+}
+document.querySelectorAll('.menu-row[data-plist]').forEach(row=>{
+  row.addEventListener('click', ()=>openProfileList(row.dataset.plist));
+});
+document.getElementById('profileListBackBtn').addEventListener('click', ()=>showView('profile'));
+
+document.getElementById('menuRatings').addEventListener('click', ()=>{
+  openSheet(`
+    <button class="sheet-close" onclick="closeSheet()">✕</button>
+    <div class="sheet-title">Bewertungen</div>
+    <div class="sheet-sub">4.9★ aus 14 abgeschlossenen Trades. Detaillierte Einzelbewertungen sind in diesem Prototyp noch nicht hinterlegt.</div>
+  `);
+});
+
+const LEGAL_TEXT = {
+  menuAgb: ['AGB', 'Platzhaltertext für den Prototyp: Hier stünden die allgemeinen Geschäftsbedingungen für die Nutzung von traderei.'],
+  menuDatenschutz: ['Datenschutz', 'Platzhaltertext für den Prototyp: Hier stünde die Datenschutzerklärung, inklusive welche Daten gespeichert und wie sie verwendet werden.'],
+  menuImpressum: ['Impressum', 'Platzhaltertext für den Prototyp: Hier stünden Anbieterkennzeichnung, Kontaktadresse und Unternehmensangaben.'],
+  menuInfo: ['Informationen', 'Platzhaltertext für den Prototyp: Hier stünden App-Version, Hilfe/FAQ und Kontaktmöglichkeiten.']
+};
+Object.keys(LEGAL_TEXT).forEach(id=>{
+  document.getElementById(id).addEventListener('click', ()=>{
+    const [title, text] = LEGAL_TEXT[id];
+    openSheet(`
+      <button class="sheet-close" onclick="closeSheet()">✕</button>
+      <div class="sheet-title">${title}</div>
+      <div class="sheet-sub">${text}</div>
+    `);
+  });
+});
+
+/* ---------------- Echter Login-Status im Profil ---------------- */
+let currentUser = null;
+
+async function updateAuthUI(){
+  const authLabel = document.getElementById('menuAuthLabel');
+  const authRow = document.getElementById('menuAuthAction');
+  const authHint = document.getElementById('authHint');
+  const guestBar = document.getElementById('guestBar');
+
+  if(!supabaseClient){
+    // Kein Backend verbunden -> reiner Demo-Modus, Login ergibt keinen Sinn
+    authRow.style.display = 'none';
+    authHint.style.display = 'block';
+    authHint.textContent = 'Demo-Modus: kein Backend verbunden.';
+    guestBar.style.display = 'none';
+    return;
+  }
+  authRow.style.display = 'flex';
+
+  const { data: { session } } = await supabaseClient.auth.getSession();
+  currentUser = session && session.user ? session.user : null;
+  guestBar.style.display = currentUser ? 'none' : 'flex';
+
+  if(currentUser){
+    authLabel.textContent = 'Ausloggen';
+    authRow.classList.add('danger');
+    authHint.style.display = 'none';
+
+    const { data: profile } = await supabaseClient
+      .from('profiles')
+      .select('display_name, city, member_since, rating_avg, rating_count')
+      .eq('id', currentUser.id)
+      .single();
+
+    if(profile){
+      document.getElementById('profileAvatar').textContent = initials(profile.display_name || currentUser.email);
+      document.getElementById('profileNameEl').innerHTML = profile.display_name || currentUser.email;
+      document.getElementById('profileSubEl').textContent = `📍 ${profile.city || 'Graz'} · Mitglied seit ${new Date(profile.member_since).toLocaleDateString('de-AT', {month:'long', year:'numeric'})}`;
+      document.getElementById('statTrades').textContent = profile.rating_count || 0;
+      document.getElementById('statRating').textContent = (profile.rating_avg || 5.0) + '★';
+    }
+    const myAktivCount = listings.filter(l=>l.mine && l.status==='aktiv').length;
+    document.getElementById('statAktiv').textContent = myAktivCount;
+  } else {
+    authLabel.textContent = 'Einloggen';
+    authRow.classList.remove('danger');
+    authHint.style.display = 'block';
+    authHint.textContent = 'Du bist noch nicht eingeloggt.';
+    document.getElementById('profileAvatar').textContent = '';
+    document.getElementById('profileNameEl').innerHTML = '';
+    document.getElementById('profileSubEl').textContent = '';
+    document.getElementById('statTrades').textContent = '–';
+    document.getElementById('statAktiv').textContent = '–';
+    document.getElementById('statRating').textContent = '–';
+  }
+}
+
+document.getElementById('guestLoginBtn').addEventListener('click', ()=>{
+  openAuthSheet(async ()=>{ await updateAuthUI(); });
+});
+
+document.getElementById('menuAuthAction').addEventListener('click', ()=>{
+  if(currentUser){
+    openSheet(`
+      <button class="sheet-close" onclick="closeSheet()">✕</button>
+      <div class="sheet-title">Ausloggen?</div>
+      <div class="sheet-sub">Du wirst von deinem traderei-Konto abgemeldet.</div>
+      <button class="btn btn-primary" style="width:100%; margin-top:6px;" id="confirmLogoutBtn">Ausloggen</button>
+    `);
+    document.getElementById('confirmLogoutBtn').addEventListener('click', async ()=>{
+      await supabaseClient.auth.signOut();
+      closeSheet();
+      showToastMsg('Abgemeldet');
+      await updateAuthUI();
+    });
+  } else {
+    openAuthSheet(async ()=>{
+      await updateAuthUI();
+    });
+  }
+});
+
+if(supabaseClient){
+  supabaseClient.auth.onAuthStateChange(()=>{ updateAuthUI(); });
+}
+
+/* ---------------- Inserat erstellen ---------------- */
+document.querySelector('.fab').addEventListener('click', openCreateForm);
+
+const photoGradients = [
+  'linear-gradient(160deg,#E1531F,#B5432E)',
+  'linear-gradient(160deg,#2E5240,#1B3A2B)',
+  'linear-gradient(160deg,#EFB13B,#E1531F)'
+];
+let formPhotos = []; // { file, previewUrl }
+let formMode = 'tausch';
+let formGame = 'pokemon';
+let formCategory = 'einzel';
+
+function renderFormCategories(){
+  const wrap = document.getElementById('formCategory');
+  const cats = CATEGORY_SETS[formGame] || [];
+  if(!cats.find(c=>c[0]===formCategory)) formCategory = cats[0] ? cats[0][0] : '';
+  wrap.innerHTML = cats.map(([key,label])=>
+    `<div class="chip-opt ${key===formCategory?'active':''}" data-cat="${key}">${label}</div>`
+  ).join('');
+  wrap.querySelectorAll('.chip-opt').forEach(c=>c.addEventListener('click', ()=>{
+    wrap.querySelectorAll('.chip-opt').forEach(x=>x.classList.remove('active'));
+    c.classList.add('active'); formCategory = c.dataset.cat;
+  }));
+}
+
+const photoFileInput = document.getElementById('photoFileInput');
+let pendingPhotoSlot = null;
+
+function renderPhotoRow(){
+  const row = document.getElementById('photoRow');
+  row.innerHTML = '';
+  for(let i=0;i<3;i++){
+    const tile = document.createElement('div');
+    if(formPhotos[i]){
+      tile.className = 'photo-tile filled';
+      tile.style.backgroundImage = `url(${formPhotos[i].previewUrl})`;
+      tile.style.backgroundSize = 'cover';
+      tile.style.backgroundPosition = 'center';
+      tile.innerHTML = `<div class="photo-remove" data-idx="${i}">✕</div>`;
+      tile.querySelector('.photo-remove').addEventListener('click', (e)=>{
+        e.stopPropagation();
+        URL.revokeObjectURL(formPhotos[i].previewUrl);
+        formPhotos.splice(i,1);
+        renderPhotoRow();
+      });
+    } else {
+      tile.className = 'photo-tile';
+      tile.innerHTML = `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 8h2.5l1.2-2h6.6l1.2 2H19a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1Z"/><circle cx="12" cy="13" r="3.3"/></svg>`;
+      tile.addEventListener('click', ()=>{
+        if(formPhotos.length < 3){
+          pendingPhotoSlot = true;
+          photoFileInput.click();
+        }
+      });
+    }
+    row.appendChild(tile);
+  }
+}
+
+photoFileInput.addEventListener('change', (e)=>{
+  const file = e.target.files[0];
+  photoFileInput.value = ''; // erlaubt erneutes Auswählen derselben Datei
+  if(!file || !pendingPhotoSlot) return;
+  pendingPhotoSlot = null;
+  if(!file.type.startsWith('image/')){
+    showToastMsg('Bitte eine Bilddatei auswählen.');
+    return;
+  }
+  if(file.size > 8 * 1024 * 1024){
+    showToastMsg('Foto ist zu groß (max. 8 MB).');
+    return;
+  }
+  formPhotos.push({ file, previewUrl: URL.createObjectURL(file) });
+  renderPhotoRow();
+});
+
+function openCreateForm(){
+  formPhotos = [];
+  formMode = 'tausch';
+  formGame = 'pokemon';
+  formCategory = 'einzel';
+  document.getElementById('formTitle').value = '';
+  document.getElementById('formHas').value = '';
+  document.getElementById('formWants').value = '';
+  document.getElementById('formPrice').value = '';
+  document.getElementById('formOrt').value = 'Graz';
+  ['errTitle','errHas','errWants','errPrice'].forEach(id=>document.getElementById(id).classList.remove('show'));
+  document.querySelectorAll('#formMode .chip-opt').forEach(c=>c.classList.toggle('active', c.dataset.mode==='tausch'));
+  document.querySelectorAll('#formGame .chip-opt').forEach(c=>c.classList.toggle('active', c.dataset.game==='pokemon'));
+  updateModeFields();
+  renderFormCategories();
+  renderPhotoRow();
+  showView('create');
+}
+
+document.querySelectorAll('#formMode .chip-opt').forEach(c=>c.addEventListener('click', ()=>{
+  document.querySelectorAll('#formMode .chip-opt').forEach(x=>x.classList.remove('active'));
+  c.classList.add('active'); formMode = c.dataset.mode; updateModeFields();
+}));
+document.querySelectorAll('#formGame .chip-opt').forEach(c=>c.addEventListener('click', ()=>{
+  document.querySelectorAll('#formGame .chip-opt').forEach(x=>x.classList.remove('active'));
+  c.classList.add('active'); formGame = c.dataset.game;
+  renderFormCategories();
+}));
+function updateModeFields(){
+  document.getElementById('wantsField').style.display = formMode==='tausch' ? 'block' : 'none';
+  document.getElementById('priceField').style.display = formMode==='verkauf' ? 'block' : 'none';
+}
+
+/* ---------------- Login / Registrierung ---------------- */
+async function requireAuth(){
+  if(!supabaseClient) return null; // kein Backend verbunden -> Demo-Modus
+  const { data: { session } } = await supabaseClient.auth.getSession();
+  if(session && session.user) return session.user;
+  return new Promise((resolve)=>{ openAuthSheet(resolve); });
+}
+
+function openAuthSheet(resolve){
+  let mode = 'signup';
+  function render(){
+    openSheet(`
+      <button class="sheet-close" onclick="closeSheet()">✕</button>
+      <div class="sheet-title">${mode==='signup' ? 'Konto erstellen' : 'Einloggen'}</div>
+      <div class="sheet-sub">${mode==='signup' ? 'Leg kurz ein Konto an, um deine Anzeige zu veröffentlichen.' : 'Melde dich an, um fortzufahren.'}</div>
+      ${mode==='signup' ? `
+      <div style="display:flex; gap:8px; margin-bottom:10px;">
+        <input class="text-input" id="authFirstName" type="text" placeholder="Vorname">
+        <input class="text-input" id="authLastName" type="text" placeholder="Nachname">
+      </div>
+      <input class="text-input" id="authDisplayName" type="text" placeholder="Anzeigename (z. B. Max J.)" style="margin-bottom:10px;">
+      ` : ''}
+      <input class="text-input" id="authEmail" type="email" placeholder="E-Mail" style="margin-bottom:10px;">
+      <input class="text-input" id="authPassword" type="password" placeholder="Passwort (min. 6 Zeichen)">
+      <div class="field-error" id="authError" style="margin-top:8px;"></div>
+      <button class="btn btn-primary" style="width:100%; margin-top:12px;" id="authSubmitBtn">${mode==='signup' ? 'Registrieren' : 'Einloggen'}</button>
+      <div style="text-align:center; margin-top:14px; font-size:12.5px; color:var(--muted);">
+        ${mode==='signup' ? 'Schon ein Konto?' : 'Noch kein Konto?'}
+        <span id="authToggle" style="color:var(--forest); font-weight:700; cursor:pointer;">${mode==='signup' ? 'Einloggen' : 'Registrieren'}</span>
+      </div>
+    `);
+    document.getElementById('authToggle').addEventListener('click', ()=>{
+      mode = mode==='signup' ? 'login' : 'signup';
+      render();
+    });
+    document.getElementById('authSubmitBtn').addEventListener('click', async ()=>{
+      const email = document.getElementById('authEmail').value.trim();
+      const password = document.getElementById('authPassword').value;
+      const errEl = document.getElementById('authError');
+      errEl.classList.remove('show'); errEl.textContent = '';
+
+      let firstName = '', lastName = '', displayName = '';
+      if(mode==='signup'){
+        firstName = document.getElementById('authFirstName').value.trim();
+        lastName = document.getElementById('authLastName').value.trim();
+        displayName = document.getElementById('authDisplayName').value.trim();
+        if(!firstName || !lastName || !displayName){
+          errEl.textContent = 'Bitte Vorname, Nachname und Anzeigename ausfüllen.';
+          errEl.classList.add('show');
+          return;
+        }
+      }
+      if(!email || password.length < 6){
+        errEl.textContent = 'Bitte gültige E-Mail und Passwort (min. 6 Zeichen) eingeben.';
+        errEl.classList.add('show');
+        return;
+      }
+      const btn = document.getElementById('authSubmitBtn');
+      const originalLabel = btn.textContent;
+      btn.disabled = true; btn.textContent = 'Bitte warten …';
+
+      const result = mode==='signup'
+        ? await supabaseClient.auth.signUp({
+            email, password,
+            options: { data: { first_name: firstName, last_name: lastName, display_name: displayName } }
+          })
+        : await supabaseClient.auth.signInWithPassword({ email, password });
+
+      if(result.error){
+        errEl.textContent = result.error.message;
+        errEl.classList.add('show');
+        btn.disabled = false; btn.textContent = originalLabel;
+        return;
+      }
+      if(mode==='signup' && !result.data.session){
+        closeSheet();
+        showToastMsg('Bestätigungs-Mail gesendet — bitte Postfach prüfen, dann einloggen.');
+        resolve(null);
+        return;
+      }
+      closeSheet();
+      showToastMsg(mode==='signup' ? 'Konto erstellt!' : 'Eingeloggt!');
+      resolve(result.data.user);
+    });
+  }
+  render();
+}
+
+/* ---------------- Foto-Upload zu Supabase Storage ---------------- */
+async function uploadListingPhotos(listingId, photos){
+  const urls = [];
+  for(let i=0;i<photos.length;i++){
+    const file = photos[i].file;
+    const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+    const path = `${listingId}/${Date.now()}-${i}.${ext}`;
+    const { error: upErr } = await supabaseClient.storage.from('listing-photos').upload(path, file, { upsert:false });
+    if(upErr){
+      console.warn('Foto-Upload fehlgeschlagen:', upErr.message);
+      continue;
+    }
+    const { data: urlData } = supabaseClient.storage.from('listing-photos').getPublicUrl(path);
+    urls.push(urlData.publicUrl);
+    await supabaseClient.from('listing_photos').insert({ listing_id: listingId, storage_path: path, sort_order: i });
+  }
+  return urls;
+}
+
+document.getElementById('publishBtn').addEventListener('click', async ()=>{
+  const title = document.getElementById('formTitle').value.trim();
+  const has = document.getElementById('formHas').value.trim();
+  const wants = document.getElementById('formWants').value.trim();
+  const price = document.getElementById('formPrice').value.trim();
+  const ort = document.getElementById('formOrt').value.trim() || 'Graz';
+
+  let valid = true;
+  document.getElementById('errTitle').classList.toggle('show', !title);
+  document.getElementById('errHas').classList.toggle('show', !has);
+  if(!title || !has) valid = false;
+  if(formMode==='tausch'){
+    document.getElementById('errWants').classList.toggle('show', !wants);
+    if(!wants) valid = false;
+  } else {
+    document.getElementById('errPrice').classList.toggle('show', !price);
+    if(!price) valid = false;
+  }
+  if(!valid) return;
+
+  const publishBtn = document.getElementById('publishBtn');
+  const originalBtnLabel = publishBtn.textContent;
+
+  let ownerId = 'demo';
+  let sellerInfo = {name:'Max J.', rating:'4.9★ · 14 Trades'};
+  let newId = String(Date.now());
+  let photoUrl = formPhotos[0] ? formPhotos[0].previewUrl : null; // lokale Vorschau als Fallback
+
+  if(supabaseClient){
+    const user = await requireAuth();
+    if(!user) return; // Login abgebrochen oder E-Mail-Bestätigung ausstehend
+
+    publishBtn.disabled = true; publishBtn.textContent = 'Wird veröffentlicht …';
+
+    const { data, error } = await supabaseClient
+      .from('listings')
+      .insert({
+        owner_id: user.id,
+        game: formGame,
+        category: formCategory,
+        mode: formMode,
+        status: 'aktiv',
+        title,
+        has_text: has,
+        wants_text: formMode==='tausch' ? wants : null,
+        price: formMode==='verkauf' ? parseFloat(price) : null,
+        city: ort
+      })
+      .select()
+      .single();
+
+    if(error){
+      publishBtn.disabled = false; publishBtn.textContent = originalBtnLabel;
+      showToastMsg('Fehler beim Speichern: ' + error.message);
+      return;
+    }
+
+    newId = data.id;
+    ownerId = user.id;
+
+    if(formPhotos.length > 0){
+      publishBtn.textContent = 'Fotos werden hochgeladen …';
+      const uploadedUrls = await uploadListingPhotos(newId, formPhotos);
+      if(uploadedUrls.length > 0) photoUrl = uploadedUrls[0];
+    }
+
+    publishBtn.disabled = false; publishBtn.textContent = originalBtnLabel;
+
+    const { data: profile } = await supabaseClient
+      .from('profiles')
+      .select('display_name, rating_avg, rating_count')
+      .eq('id', user.id)
+      .single();
+    if(profile){
+      sellerInfo = { name: profile.display_name, rating: `${profile.rating_avg}★ · ${profile.rating_count} Trades` };
+    }
+  }
+
+  const newListing = {
+    id: newId,
+    postedHoursAgo: 0,
+    game: formGame,
+    category: formCategory,
+    mode: formMode,
+    status: 'aktiv',
+    mine: true,
+    title,
+    photoUrl: photoUrl || undefined,
+    thumbGrad: photoGradients[listings.length % photoGradients.length],
+    thumbLabel: title.split(' ').map(w=>w[0]).join('').slice(0,3).toUpperCase(),
+    has,
+    wants: formMode==='tausch' ? wants : null,
+    preis: formMode==='verkauf' ? price+' €' : undefined,
+    ort: ort+' · in deiner Nähe',
+    zeit: 'gerade eben',
+    seller: sellerInfo
+  };
+  listings.unshift(newListing);
+
+  const toast = document.getElementById('toast');
+  toast.classList.add('show');
+  setTimeout(()=>toast.classList.remove('show'), 1600);
+
+  renderFeed();
+  renderProfile();
+  setTimeout(()=>openDetail(newListing.id), 550);
+});
+
+/* ---------------- Generisches Sheet ---------------- */
+function openSheet(html){
+  document.getElementById('sheetContent').innerHTML = html;
+  document.getElementById('sheetOverlay').classList.add('open');
+}
+function closeSheet(){
+  document.getElementById('sheetOverlay').classList.remove('open');
+}
+document.getElementById('sheetOverlay').addEventListener('click', (e)=>{
+  if(e.target.id==='sheetOverlay') closeSheet();
+});
+function showToastMsg(msg){
+  const t = document.getElementById('globalToast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), 1800);
+}
+
+/* ---------------- Overflow-Menü ---------------- */
+function openOverflowMenu(anchorEl, options){
+  const menu = document.getElementById('overflowMenu');
+  const rect = anchorEl.getBoundingClientRect();
+  const appRect = document.querySelector('.app').getBoundingClientRect();
+  menu.innerHTML = options.map((o,i)=>`<div class="overflow-opt ${o.danger?'danger':''}" data-idx="${i}">${o.label}</div>`).join('');
+  menu.style.top = (rect.bottom - appRect.top + 6) + 'px';
+  menu.style.right = (appRect.right - rect.right) + 'px';
+  menu.classList.add('open');
+  menu.querySelectorAll('.overflow-opt').forEach(el=>{
+    el.addEventListener('click', (e)=>{
+      e.stopPropagation();
+      options[parseInt(el.dataset.idx)].action();
+      menu.classList.remove('open');
+    });
+  });
+}
+document.addEventListener('click', ()=>document.getElementById('overflowMenu').classList.remove('open'));
+
+/* ---------------- Melden & Blockieren ---------------- */
+function reportUser(name){
+  openSheet(`
+    <button class="sheet-close" onclick="closeSheet()">✕</button>
+    <div class="sheet-title">Nutzer melden</div>
+    <div class="sheet-sub">Warum möchtest du ${name} melden?</div>
+    ${['Betrugsverdacht','Unangemessene Nachrichten','Falsche Angaben in der Anzeige','Sonstiges'].map(r=>`<div class="pick-item" onclick="submitReport()" style="cursor:pointer;"><div class="pick-item-title">${r}</div></div>`).join('')}
+  `);
+}
+function submitReport(){
+  closeSheet();
+  showToastMsg('Meldung gesendet. Danke fürs Aufpassen.');
+}
+function blockUser(name){
+  openSheet(`
+    <button class="sheet-close" onclick="closeSheet()">✕</button>
+    <div class="sheet-title">${name} blockieren?</div>
+    <div class="sheet-sub">${name} kann dir danach keine Nachrichten mehr schreiben und deine Anzeigen nicht mehr sehen.</div>
+    <button class="btn btn-primary" style="width:100%; margin-top:6px;" onclick="confirmBlock('${name}')">Blockieren</button>
+  `);
+}
+function confirmBlock(name){
+  closeSheet();
+  showToastMsg(name + ' wurde blockiert.');
+}
+
+/* ---------------- Tausch-Vorschlag-Flow ---------------- */
+function openTradeOfferSheet(listing){
+  const myTausch = listings.filter(l=>l.mine && l.status==='aktiv' && l.mode==='tausch');
+  openSheet(`
+    <button class="sheet-close" onclick="closeSheet()">✕</button>
+    <div class="sheet-title">Tausch vorschlagen</div>
+    <div class="sheet-sub">Wähle eine deiner Anzeigen, die du gegen „${listing.title}" anbieten möchtest.</div>
+    ${myTausch.length ? myTausch.map(l=>`
+      <div class="pick-item" data-pickid="${l.id}">
+        ${thumbHTML(l)}
+        <div><div class="pick-item-title">${l.title}</div><div class="pick-item-sub">${l.has}</div></div>
+      </div>`).join('') : `<div class="empty-state">Du hast noch keine aktive Tausch-Anzeige. Erstelle zuerst eine, um einen Vorschlag zu machen.</div>`}
+    ${myTausch.length ? `<button class="btn btn-primary" style="width:100%; margin-top:8px;" id="sendOfferBtn" disabled>Vorschlag senden</button>` : ''}
+  `);
+  let selectedId = null;
+  document.querySelectorAll('.pick-item[data-pickid]').forEach(el=>{
+    el.addEventListener('click', ()=>{
+      document.querySelectorAll('.pick-item[data-pickid]').forEach(x=>x.classList.remove('selected'));
+      el.classList.add('selected');
+      selectedId = el.dataset.pickid;
+      const btn = document.getElementById('sendOfferBtn');
+      if(btn) btn.disabled = false;
+    });
+  });
+  const sendBtn = document.getElementById('sendOfferBtn');
+  if(sendBtn) sendBtn.addEventListener('click', ()=>{
+    if(!selectedId) return;
+    const mine = listings.find(l=>String(l.id)===String(selectedId));
+    sendTradeOffer(listing, mine);
+  });
+}
+function sendTradeOffer(theirListing, myListing){
+  closeSheet();
+  let convo = conversations.find(c=>c.listingId===theirListing.id && c.partner===theirListing.seller.name);
+  if(!convo){
+    convo = {id:'c'+Date.now(), listingId:theirListing.id, partner:theirListing.seller.name, sub:'Zu: '+theirListing.title, unread:false, time:'jetzt', messages:[]};
+    conversations.unshift(convo);
+  }
+  convo.messages.push({from:'me', type:'offer', mine:myListing, theirs:theirListing, time:'jetzt'});
+  convo.time = 'jetzt';
+  renderChatlist();
+  openChat(convo.id);
+  showToastMsg('Tauschvorschlag gesendet');
+}
+
+/* ---------------- Bewertung ---------------- */
+function openRatingSheet(id){
+  let stars = 5;
+  openSheet(`
+    <button class="sheet-close" onclick="closeSheet()">✕</button>
+    <div class="sheet-title">Trade bewerten</div>
+    <div class="sheet-sub">Wie war dein Tausch-Erlebnis?</div>
+    <div class="star-row" id="starRow">
+      ${[1,2,3,4,5].map(n=>`<button class="star-btn filled" data-star="${n}"><svg viewBox="0 0 24 24"><path d="M12 2l3.1 6.3 6.9 1-5 4.9 1.2 6.9L12 17.8 5.8 21l1.2-6.9-5-4.9 6.9-1L12 2Z"/></svg></button>`).join('')}
+    </div>
+    <textarea class="text-area" id="ratingComment" placeholder="Kurzer Kommentar (optional)"></textarea>
+    <button class="btn btn-primary" style="width:100%; margin-top:12px;" id="submitRatingBtn">Bewertung abschicken</button>
+  `);
+  const starRow = document.getElementById('starRow');
+  function paintStars(n){
+    starRow.querySelectorAll('.star-btn').forEach(b=>{
+      b.classList.toggle('filled', parseInt(b.dataset.star)<=n);
+    });
+  }
+  paintStars(stars);
+  starRow.querySelectorAll('.star-btn').forEach(b=>b.addEventListener('click', ()=>{
+    stars = parseInt(b.dataset.star); paintStars(stars);
+  }));
+  document.getElementById('submitRatingBtn').addEventListener('click', ()=>{
+    const l = listings.find(x=>String(x.id)===String(id));
+    l.rated = true;
+    closeSheet();
+    showToastMsg('Danke für deine Bewertung!');
+    renderProfile();
+  });
+}
+
+/* ---------------- Anzeige hervorheben (Boost) ---------------- */
+function openBoostSheet(id){
+  openSheet(`
+    <button class="sheet-close" onclick="closeSheet()">✕</button>
+    <div class="sheet-title">Anzeige hervorheben</div>
+    <div class="sheet-sub">Deine Anzeige erscheint 3 Tage lang ganz oben im Feed und bekommt ein Top-Label.</div>
+    <div class="boost-price">2,99 €</div>
+    <div class="boost-sub">Einmalig, für 3 Tage</div>
+    <button class="btn btn-primary" style="width:100%;" id="confirmBoostBtn">Jetzt hervorheben</button>
+  `);
+  document.getElementById('confirmBoostBtn').addEventListener('click', ()=>{
+    const l = listings.find(x=>String(x.id)===String(id));
+    l.boosted = true;
+    closeSheet();
+    showToastMsg('Anzeige ist jetzt hervorgehoben');
+    renderFeed(); renderProfile();
+  });
+}
+
+/* ---------------- traderei Plus ---------------- */
+function openPlusSheet(){
+  openSheet(`
+    <button class="sheet-close" onclick="closeSheet()">✕</button>
+    <div class="sheet-title">traderei Plus</div>
+    <div class="sheet-sub">Mehr Durchblick für ambitionierte Trader.</div>
+    <div class="plus-feature"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M5 12.5 9.5 17 19 7"/></svg>Marktpreise für alle Karten & Displays</div>
+    <div class="plus-feature"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M5 12.5 9.5 17 19 7"/></svg>Unbegrenzte hervorgehobene Anzeigen</div>
+    <div class="plus-feature"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M5 12.5 9.5 17 19 7"/></svg>Preis-Alerts für deine Wunschkarten</div>
+    <div class="boost-price">4,99 € <span style="font-size:13px; color:var(--muted); font-weight:600;">/ Monat</span></div>
+    <button class="btn btn-primary" style="width:100%; margin-top:8px;" id="unlockPlusBtn">Plus freischalten</button>
+  `);
+  document.getElementById('unlockPlusBtn').addEventListener('click', ()=>{
+    plusUnlocked = true;
+    closeSheet();
+    showToastMsg('traderei Plus aktiviert');
+    if(currentListingId) openDetail(currentListingId);
+  });
+}
+
+/* ---------------- Karte ---------------- */
+function renderMap(){
+  const svg = document.getElementById('mapSvg');
+  const active = listings.filter(l=>l.status==='aktiv' && getDistanceKm(l) <= radiusKm);
+  // Deterministisch aus der id eine Position innerhalb der Karte ableiten (stilisiert, keine echten Koordinaten)
+  let html = `
+    <rect x="0" y="0" width="380" height="560" fill="#12131C"/>
+    <path d="M0 120 Q 100 90 200 130 T 380 110" stroke="#1E2030" stroke-width="26" fill="none"/>
+    <path d="M0 320 Q 120 300 220 340 T 380 330" stroke="#1E2030" stroke-width="18" fill="none"/>
+    <circle cx="190" cy="270" r="70" fill="#191B29"/>
+  `;
+  active.forEach(l=>{
+    const seed = l.id * 137.5;
+    const x = 40 + (Math.abs(Math.sin(seed)) * 300);
+    const y = 60 + (Math.abs(Math.cos(seed*1.3)) * 440);
+    html += `
+      <g class="map-pin ${l.mode}" data-pinid="${l.id}" transform="translate(${x},${y})">
+        <circle class="dot" r="9"/>
+      </g>`;
+  });
+  svg.innerHTML = html;
+  svg.querySelectorAll('.map-pin').forEach(pin=>{
+    pin.addEventListener('click', ()=>showMapCard(pin.dataset.pinid));
+  });
+  document.getElementById('mapCard').classList.remove('open');
+}
+function showMapCard(id){
+  const l = listings.find(x=>String(x.id)===String(id));
+  const card = document.getElementById('mapCard');
+  card.innerHTML = `
+    ${thumbHTML(l)}
+    <div style="flex:1; min-width:0;">
+      <div class="pick-item-title">${l.title}</div>
+      <div class="pick-item-sub">${gameLabel(l.game)} · ${l.ort}</div>
+    </div>
+  `;
+  card.classList.add('open');
+  card.onclick = ()=>openDetail(id);
+}
+
+/* ---------------- Händlerprofil ---------------- */
+function openShopProfile(sellerName){
+  const shop = SHOPS[sellerName];
+  const items = listings.filter(l=>l.status==='aktiv' && l.seller.name===sellerName);
+  const mapsUrl = 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(shop.address);
+  document.getElementById('shopScroll').innerHTML = `
+    <div class="profile-head">
+      <div class="shop-avatar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9h16l-1.5-4h-13L4 9Z"/><path d="M5 9v10h14V9"/><path d="M9 19v-5h6v5"/></svg></div>
+      <div class="profile-name">${shop.shopName}</div>
+      <div class="profile-sub">${sellerBadgeHTML({type:'shop'})} betrieben von ${sellerName}</div>
+      <div class="stat-row">
+        <div class="stat"><div class="stat-num">${items.length}</div><div class="stat-label">Verfügbar</div></div>
+        <div class="stat"><div class="stat-num">${listings.find(l=>l.seller.name===sellerName).seller.rating.split(' ')[0]}</div><div class="stat-label">Bewertung</div></div>
+      </div>
+    </div>
+    <div style="height:14px;"></div>
+    <div class="shop-info-row">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-6.5-5.2-8.5-9.2A5.5 5.5 0 0 1 12 4a5.5 5.5 0 0 1 8.5 7.8C18.5 15.8 12 21 12 21Z"/><circle cx="12" cy="10.5" r="2"/></svg>
+      <div><div class="shop-info-title">${shop.address}</div><div class="shop-info-sub">Abholadresse für Reservierungen</div></div>
+    </div>
+    <div class="shop-info-row">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+      <div><div class="shop-info-title">${shop.hours}</div><div class="shop-info-sub">Öffnungszeiten</div></div>
+    </div>
+    <div class="detail-block" style="margin:0 16px 12px;">
+      <div class="detail-block-text">${shop.desc}</div>
+    </div>
+    <div class="shop-link-row">
+      <a class="shop-link-btn" href="${mapsUrl}" target="_blank" rel="noopener noreferrer">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 20 3 17V7l6 3m0 10 6-3m-6 3V10m6 7 6-3V4l-6 3m0 10V7m0 0L9 4"/></svg>
+        Route planen
+      </a>
+    </div>
+    <div class="shop-section-label">Verfügbare Produkte</div>
+    <div class="profile-list" id="shopItemList"></div>
+  `;
+  const list = document.getElementById('shopItemList');
+  list.innerHTML = items.length
+    ? items.map(l=>listingCardHTML(l)).join('')
+    : `<div class="empty-state">Aktuell keine aktiven Anzeigen.</div>`;
+  wireListingCards(list);
+  showView('shop');
+}
+document.getElementById('shopBackBtn').addEventListener('click', ()=>showView('detail'));
+
+/* ---------------- Reservierung beim Händler anfragen ---------------- */
+function openReserveSheet(listing){
+  const shop = SHOPS[listing.seller.name];
+  openSheet(`
+    <button class="sheet-close" onclick="closeSheet()">✕</button>
+    <div class="sheet-title">Reservierung anfragen</div>
+    <div class="sheet-sub">Wir schicken ${shop.shopName} eine Anfrage für „${listing.title}". Der Laden entscheidet, ob er reservieren kann – erst mit deren Zusage ist es verbindlich.</div>
+    <div class="shop-info-row" style="margin:0 0 9px;">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-6.5-5.2-8.5-9.2A5.5 5.5 0 0 1 12 4a5.5 5.5 0 0 1 8.5 7.8C18.5 15.8 12 21 12 21Z"/><circle cx="12" cy="10.5" r="2"/></svg>
+      <div><div class="shop-info-title">${shop.shopName}</div><div class="shop-info-sub">${shop.address}</div></div>
+    </div>
+    <div class="shop-info-row" style="margin:0 0 9px;">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+      <div><div class="shop-info-title">${shop.hours}</div><div class="shop-info-sub">Öffnungszeiten</div></div>
+    </div>
+    <button class="btn btn-primary" style="width:100%; margin-top:6px;" id="confirmReserveBtn">Anfrage senden</button>
+  `);
+  document.getElementById('confirmReserveBtn').addEventListener('click', ()=>requestReservation(listing, shop));
+}
+function requestReservation(listing, shop){
+  closeSheet();
+  let convo = conversations.find(c=>c.listingId===listing.id && c.partner===listing.seller.name);
+  if(!convo){
+    convo = {id:'c'+Date.now(), listingId:listing.id, partner:listing.seller.name, sub:'Zu: '+listing.title, unread:false, time:'jetzt', messages:[]};
+    conversations.unshift(convo);
+  }
+  const reserveMsg = {from:'me', type:'reserve', listing, shop, status:'pending', time:'jetzt'};
+  convo.messages.push(reserveMsg);
+  convo.time = 'jetzt';
+  renderChatlist();
+  openChat(convo.id);
+  showToastMsg('Anfrage an ' + shop.shopName + ' gesendet');
+
+  // Simuliert die Antwort des Händlers, da es in diesem Prototyp keinen echten zweiten Nutzer gibt.
+  setTimeout(()=>{
+    reserveMsg.status = 'accepted';
+    convo.messages.push({from:'them', text:'Passt, ich leg\'s für dich zurück. Bis bald im Laden!', time:'jetzt'});
+    convo.time = 'jetzt';
+    if(currentChatId===convo.id){ renderMessages(convo); } else { convo.unread = true; }
+    renderChatlist();
+  }, 2200);
+}
+
+/* ---------------- Echte Anzeigen aus Supabase laden ---------------- */
+function hashCode(str){
+  let h = 0;
+  for(let i=0;i<str.length;i++){ h = (h<<5)-h+str.charCodeAt(i); h|=0; }
+  return h;
+}
+async function loadListingsFromSupabase(){
+  if(!supabaseClient) return; // kein Backend verbunden -> Demo-Daten bleiben
+
+  try {
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    const myId = session && session.user ? session.user.id : null;
+
+    const { data, error } = await supabaseClient
+      .from('listings')
+      .select('*, profiles(display_name, rating_avg, rating_count, verified, is_shop)')
+      .order('created_at', { ascending:false });
+
+    if(error){ console.warn('Konnte Anzeigen nicht laden, bleibe bei Demo-Daten:', error.message); return; }
+    if(!data || data.length === 0) return; // noch keine echten Anzeigen -> Demo-Daten bleiben sichtbar
+
+    const mapped = data.map(row=>{
+      const hoursAgo = Math.max(0, Math.round((Date.now() - new Date(row.created_at).getTime())/3600000));
+      const zeit = hoursAgo < 1 ? 'gerade eben' : hoursAgo < 24 ? `vor ${hoursAgo} Std` : `vor ${Math.round(hoursAgo/24)} Tag(en)`;
+      return {
+        id: row.id,
+        postedHoursAgo: hoursAgo,
+        game: row.game,
+        category: row.category,
+        mode: row.mode,
+        status: row.status,
+        mine: myId ? row.owner_id === myId : false,
+        title: row.title,
+        thumbGrad: photoGradients[Math.abs(hashCode(row.id)) % photoGradients.length],
+        thumbLabel: row.title.split(' ').map(w=>w[0]).join('').slice(0,3).toUpperCase(),
+        has: row.has_text,
+        wants: row.wants_text,
+        preis: row.price ? row.price+' €' : undefined,
+        marketRange: row.market_range || undefined,
+        boosted: !!row.boosted,
+        ort: (row.city || 'Graz') + ' · online',
+        zeit,
+        seller: row.profiles ? {
+          name: row.profiles.display_name,
+          rating: `${row.profiles.rating_avg}★ · ${row.profiles.rating_count} Trades`,
+          verified: row.profiles.verified,
+          type: row.profiles.is_shop ? 'shop' : undefined
+        } : { name:'Unbekannt', rating:'–' }
+      };
+    });
+
+    listings.splice(0, listings.length, ...mapped);
+    renderFeed();
+    renderProfile();
+    renderMap();
+  } catch(e){
+    console.warn('Fehler beim Laden echter Anzeigen, bleibe bei Demo-Daten:', e);
+  }
+}
+
+/* ---------------- Init ---------------- */
+renderFeed();
+renderChatlist();
+renderProfile();
+renderMap();
+updateAuthUI();
+loadListingsFromSupabase();
+</script>
+</body>
+</html>
