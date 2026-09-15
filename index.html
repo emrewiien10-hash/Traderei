@@ -1651,6 +1651,7 @@ function openDetail(id){
           {label:'Nutzer melden', action:()=>reportUser(l.seller.name)},
           {label:'Nutzer blockieren', action:()=>blockUser(l.seller.name), danger:true}
         ];
+    if(!isMine && isAdmin()) options.push({label:'Als Admin löschen', action:()=>confirmDeleteListing(l), danger:true});
     openOverflowMenu(document.getElementById('detailOverflowBtn'), options);
   };
   showView('detail');
@@ -2034,6 +2035,8 @@ Object.keys(LEGAL_TEXT).forEach(id=>{
 
 /* ---------------- Echter Login-Status im Profil ---------------- */
 let currentUser = null;
+function isAdmin(){return currentUser?.app_metadata?.role === 'admin';}
+function canDeleteListing(listing){return !!currentUser && (listing.ownerId === currentUser.id || listing.seller?.id === currentUser.id || isAdmin());}
 let openedConvoIds = new Set();
 let currentRealtimeChannel = null;
 
@@ -2078,7 +2081,7 @@ async function updateAuthUI(){
         avatarEl.style.backgroundImage = '';
         avatarEl.textContent = initials(profile.display_name || currentUser.email);
       }
-      document.getElementById('profileNameEl').innerHTML = profile.display_name || currentUser.email;
+      document.getElementById('profileNameEl').textContent = (profile.display_name || currentUser.email) + (isAdmin() ? ' · Admin' : '');
       document.getElementById('profileSubEl').textContent = `📍 ${profile.city || 'Graz'} · Mitglied seit ${new Date(profile.member_since).toLocaleDateString('de-AT', {month:'long', year:'numeric'})}`;
       document.getElementById('statTrades').textContent = profile.rating_count || 0;
       document.getElementById('statRating').textContent = (profile.rating_avg || 5.0) + '★';
@@ -2534,6 +2537,7 @@ document.getElementById('publishBtn').addEventListener('click', async ()=>{
 
   const newListing = {
     id: newId,
+    ownerId,
     postedHoursAgo: 0,
     game: formGame,
     category: formCategory,
@@ -3427,6 +3431,7 @@ document.getElementById('newChatFab').addEventListener('click', async ()=>{
 
 /* ---------------- Anzeige löschen ---------------- */
 function confirmDeleteListing(listing){
+  if(!canDeleteListing(listing)){showToastMsg('Keine Berechtigung zum Löschen.');return;}
   openSheet(`
     <button class="sheet-close" onclick="closeSheet()">✕</button>
     <div class="sheet-title">Anzeige löschen?</div>
@@ -3436,10 +3441,13 @@ function confirmDeleteListing(listing){
   document.getElementById('confirmDeleteBtn').addEventListener('click', ()=>deleteListing(listing.id));
 }
 async function deleteListing(id){
+  const listing=listings.find(l=>String(l.id)===String(id));
+  if(!listing || !canDeleteListing(listing) || !supabaseClient){showToastMsg('Keine Berechtigung zum Löschen.');return;}
   closeSheet();
   if(supabaseClient && currentUser){
-    const { error } = await supabaseClient.from('listings').delete().eq('id', id);
+    const { data, error } = await supabaseClient.from('listings').delete().eq('id', id).select('id');
     if(error){ showToastMsg('Fehler beim Löschen: ' + error.message); return; }
+    if(!data?.length){showToastMsg('Anzeige nicht gelöscht: keine Berechtigung oder bereits entfernt.');return;}
   }
   const idx = listings.findIndex(l=>String(l.id)===String(id));
   if(idx !== -1) listings.splice(idx, 1);
