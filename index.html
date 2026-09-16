@@ -835,6 +835,17 @@
     #view-feed .discover-intro{margin:12px 0 22px;}
     #view-feed>.fab{position:fixed;bottom:28px;right:32px;z-index:11;}
   }
+
+  .dealer-row{display:flex;align-items:center;gap:18px;width:100%;padding:22px 18px;background:none;border:0;border-bottom:1px solid var(--line);color:var(--ink);text-align:left;cursor:pointer;}
+  .dealer-row>span:nth-child(2){flex:1}.dealer-row small{display:block;color:var(--muted);margin-top:7px}.dealer-symbol{color:var(--forest);font-weight:700;font-size:20px;width:50px;}
+  #authDealerFields .field-label{display:block;margin-top:14px;}
+  .detail-photo-open{display:block;position:relative;width:100%;border:0;padding:0;background:var(--card-bg);border-radius:12px;overflow:hidden;cursor:zoom-in;}
+  .detail-photo-open>img{display:block;width:100%;height:300px;object-fit:contain;}.detail-photo-open>span{position:absolute;bottom:10px;left:10px;background:#000b;color:white;border-radius:8px;padding:7px 10px;font-size:12px;}
+  .detail-photo-thumbs{display:flex;gap:10px;margin-top:12px;}.detail-photo-thumbs button{padding:0;border:1px solid var(--line);border-radius:8px;overflow:hidden;cursor:zoom-in;background:var(--card-bg);}.detail-photo-thumbs img{display:block;width:60px;height:70px;object-fit:cover;}
+  #photoViewer{position:fixed;inset:0;width:100%;height:100%;max-width:none;max-height:none;margin:0;padding:60px 52px;border:0;background:#08090ff5;color:white;overflow:hidden;}
+  #photoViewer::backdrop{background:#000e;}#photoViewer[open]{display:flex;align-items:center;justify-content:center;}#viewerImage{max-width:100%;max-height:100%;object-fit:contain;}
+  #photoViewer button{position:absolute;width:44px;height:44px;background:#ffffff24;color:white;border:1px solid #ffffff40;border-radius:50%;font-size:28px;cursor:pointer;}#photoViewer button[hidden]{display:none;}#viewerClose{top:14px;right:14px;}#viewerPrev{left:6px;top:50%;}#viewerNext{right:6px;top:50%;}#viewerCount{position:absolute;bottom:20px;left:0;right:0;text-align:center;}
+  @media(max-width:599px){.navbar{padding-left:3px;padding-right:3px;gap:0;}.navitem{min-width:0;font-size:10px;padding-left:3px;padding-right:3px;}.detail-photo-open>img{height:240px;}#photoViewer{padding:60px 8px;}#viewerPrev,#viewerNext{z-index:1;}}
 </style>
 </head>
 <body>
@@ -1092,7 +1103,7 @@
       <div class="field">
         <div class="field-label">Fotos</div>
         <div class="photo-row" id="photoRow"></div>
-        <input type="file" id="photoFileInput" accept="image/*" style="display:none;">
+        <input type="file" id="photoFileInput" accept="image/*" multiple style="display:none;">
         <div class="field-hint">Bis zu 3 Fotos. Gute Fotos beschleunigen den Tausch.</div>
       </div>
 
@@ -1194,6 +1205,11 @@
     </div>
   </div>
 
+  <div class="view" id="view-dealers">
+    <div class="topbar"><h1 class="subheader-title">Händler entdecken</h1><p class="field-hint">Geschäfte, Sammler und neue Lieblingsstücke.</p><input class="text-input" id="dealerSearch" type="search" placeholder="Geschäft oder Ort suchen" aria-label="Händler suchen"></div>
+    <div class="profile-scroll" id="dealerList" aria-live="polite"></div>
+  </div>
+  <dialog id="photoViewer" aria-label="Inseratfotos"><button id="viewerClose" aria-label="Fotogalerie schließen">✕</button><button id="viewerPrev" aria-label="Vorheriges Foto">‹</button><img id="viewerImage" alt=""><button id="viewerNext" aria-label="Nächstes Foto">›</button><div id="viewerCount" aria-live="polite"></div></dialog>
   <!-- ============ SHARED BOTTOM NAV ============ -->
   <div class="navbar" id="navbar">
     <button type="button" class="brand desktop-brand" id="desktopHomeBtn" aria-label="traderei – zur Startseite">
@@ -1234,6 +1250,7 @@
       </div>
       Chats
     </div>
+    <div class="navitem" data-nav="dealers"><div class="navicon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 9h18l-2-5H5L3 9Z M5 9v11h14V9 M9 20v-6h6v6"/></svg></div>Händler</div>
     <div class="navitem" data-nav="profile">
       <div class="navicon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8.3" r="3.3"/><path d="M5.2 19.4c1.15-3.35 3.9-5 6.8-5s5.65 1.65 6.8 5"/></svg></div>
       Profil
@@ -1321,8 +1338,9 @@ function showView(name){
   document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
   document.getElementById('view-'+name).classList.add('active');
   document.querySelectorAll('.navitem').forEach(n=>n.classList.toggle('active', n.dataset.nav===name));
-  document.getElementById('navbar').style.display = ['feed','map','chats','profile'].includes(name) ? 'flex' : 'none';
+  document.getElementById('navbar').style.display = ['feed','map','chats','dealers','profile'].includes(name) ? 'flex' : 'none';
   if(name==='map') renderMap();
+  if(name==='dealers') loadDealers();
 }
 document.querySelectorAll('.navitem').forEach(n=>n.addEventListener('click', ()=>showView(n.dataset.nav)));
 document.getElementById('desktopHomeBtn').addEventListener('click',()=>{showView('feed');document.getElementById('view-feed').scrollTop=0;});
@@ -1582,7 +1600,7 @@ function openDetail(id){
   const isMine = l.mine;
   document.getElementById('detailScroll').innerHTML = `
     <div style="position:relative;">
-      ${thumbHTML(l, 'lg')}
+      ${listingGalleryHTML(l)}
       <button class="detail-fav ${favorites.has(l.id)?'active':''}" id="detailFavBtn">
         <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20s-7-4.4-9.5-9A5.5 5.5 0 0 1 12 6a5.5 5.5 0 0 1 9.5 5c-2.5 4.6-9.5 9-9.5 9Z"/></svg>
       </button>
@@ -1609,12 +1627,13 @@ function openDetail(id){
       ${l.mine ? '' : `<svg class="seller-row-chevron" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg>`}
     </div>
   `;
+  wireDetailGallery(l);
   document.getElementById('detailFavBtn').addEventListener('click', ()=>toggleFavorite(l.id, document.getElementById('detailFavBtn')));
   const lockBtn = document.getElementById('marketLockBtn');
   if(lockBtn) lockBtn.addEventListener('click', openPlusSheet);
   document.getElementById('sellerRow').addEventListener('click', ()=>{
     if(l.seller.type==='shop'){
-      openShopProfile(l.seller.name);
+      openShopProfile(l.seller.id || l.ownerId, 'detail');
     } else if(!l.mine){
       openPersonProfile({ name:l.seller.name, rating:l.seller.rating, verified:l.seller.verified, type:l.seller.type });
     }
@@ -2202,19 +2221,12 @@ function renderPhotoRow(){
 }
 
 photoFileInput.addEventListener('change', (e)=>{
-  const file = e.target.files[0];
-  photoFileInput.value = ''; // erlaubt erneutes Auswählen derselben Datei
-  if(!file || !pendingPhotoSlot) return;
-  pendingPhotoSlot = null;
-  if(!file.type.startsWith('image/')){
-    showToastMsg('Bitte eine Bilddatei auswählen.');
-    return;
+  const files=Array.from(e.target.files||[]); photoFileInput.value=''; pendingPhotoSlot=null;
+  for(const file of files){
+    if(formPhotos.length>=3){showToastMsg('Maximal 3 Fotos pro Inserat.');break;}
+    if(!file.type.startsWith('image/') || file.size>8*1024*1024){showToastMsg('Bitte Bilder bis 8 MB auswählen.');continue;}
+    formPhotos.push({file,previewUrl:URL.createObjectURL(file)});
   }
-  if(file.size > 8 * 1024 * 1024){
-    showToastMsg('Foto ist zu groß (max. 8 MB).');
-    return;
-  }
-  formPhotos.push({ file, previewUrl: URL.createObjectURL(file) });
   renderPhotoRow();
 });
 
@@ -2250,7 +2262,7 @@ function openEditForm(listing){
   document.getElementById('createFormSub').textContent = 'Änderungen sind sofort für alle sichtbar';
   document.getElementById('publishBtn').textContent = 'Änderungen speichern';
 
-  formPhotos = listing.photoUrl ? [{ file:null, previewUrl:listing.photoUrl, existing:true }] : [];
+  formPhotos = (listing.photos || []).map(p=>({file:null,previewUrl:p.url,storagePath:p.storagePath,existing:true}));
   formMode = listing.mode;
   formGame = listing.game;
   formCategory = listing.category;
@@ -2305,6 +2317,15 @@ function openAuthSheet(resolve){
         <input class="text-input" id="authFirstName" type="text" placeholder="Vorname">
         <input class="text-input" id="authLastName" type="text" placeholder="Nachname">
       </div>
+      <label class="field-label" for="authAccountType">Kontotyp</label>
+      <select class="text-input" id="authAccountType" style="margin-bottom:12px"><option value="private">Privatperson</option><option value="dealer">Händler / Geschäft</option></select>
+      <div id="authDealerFields" hidden>
+        <label class="field-label" for="authShopName">Geschäftsname *</label><input class="text-input" id="authShopName" maxlength="120" placeholder="Name deines Geschäfts">
+        <label class="field-label" for="authShopCity">Ort / Geschäftsadresse *</label><input class="text-input" id="authShopCity" maxlength="250" placeholder="PLZ, Ort – optional Straße">
+        <label class="field-label" for="authShopHours">Öffnungszeiten</label><input class="text-input" id="authShopHours" maxlength="300" placeholder="z. B. Mo–Fr 10–18 Uhr">
+        <label class="field-label" for="authShopDescription">Über dein Geschäft</label><textarea class="text-area" id="authShopDescription" maxlength="2000" placeholder="Sortiment, Spiele, Abholung …"></textarea>
+        <p class="field-hint">Diese Geschäftsangaben sind öffentlich. Ein Händlerkonto ist keine Bestätigung einer Prüfung.</p>
+      </div>
       <input class="text-input" id="authDisplayName" type="text" placeholder="Anzeigename (z. B. Max J.)" style="margin-bottom:10px;">
       ` : ''}
       <input class="text-input" id="authEmail" type="email" placeholder="E-Mail" style="margin-bottom:10px;">
@@ -2316,6 +2337,7 @@ function openAuthSheet(resolve){
         <span id="authToggle" style="color:var(--forest); font-weight:700; cursor:pointer;">${mode==='signup' ? 'Einloggen' : 'Registrieren'}</span>
       </div>
     `);
+    document.getElementById('authAccountType')?.addEventListener('change',e=>{document.getElementById('authDealerFields').hidden=e.target.value!=='dealer';});
     document.getElementById('authToggle').addEventListener('click', ()=>{
       mode = mode==='signup' ? 'login' : 'signup';
       render();
@@ -2327,10 +2349,15 @@ function openAuthSheet(resolve){
       errEl.classList.remove('show'); errEl.textContent = '';
 
       let firstName = '', lastName = '', displayName = '';
+      let dealerData={account_type:'private'};
       if(mode==='signup'){
         firstName = document.getElementById('authFirstName').value.trim();
         lastName = document.getElementById('authLastName').value.trim();
         displayName = document.getElementById('authDisplayName').value.trim();
+        if(document.getElementById('authAccountType').value==='dealer'){
+          dealerData={account_type:'dealer',shop_name:document.getElementById('authShopName').value.trim(),city:document.getElementById('authShopCity').value.trim(),opening_hours:document.getElementById('authShopHours').value.trim(),shop_description:document.getElementById('authShopDescription').value.trim()};
+          if(!dealerData.shop_name||!dealerData.city){errEl.textContent='Bitte Geschäftsname und Ort ausfüllen.';errEl.classList.add('show');return;}
+        }
         if(!firstName || !lastName || !displayName){
           errEl.textContent = 'Bitte Vorname, Nachname und Anzeigename ausfüllen.';
           errEl.classList.add('show');
@@ -2349,7 +2376,7 @@ function openAuthSheet(resolve){
       const result = mode==='signup'
         ? await supabaseClient.auth.signUp({
             email, password,
-            options: { data: { first_name: firstName, last_name: lastName, display_name: displayName } }
+            options: { data: { first_name: firstName, last_name: lastName, display_name: displayName, ...dealerData } }
           })
         : await supabaseClient.auth.signInWithPassword({ email, password });
 
@@ -2375,196 +2402,64 @@ function openAuthSheet(resolve){
 
 /* ---------------- Foto-Upload zu Supabase Storage ---------------- */
 async function uploadListingPhotos(listingId, photos){
-  const urls = [];
-  for(let i=0;i<photos.length;i++){
-    const file = photos[i].file;
-    const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
-    const path = `${listingId}/${Date.now()}-${i}.${ext}`;
-    const { error: upErr } = await supabaseClient.storage.from('listing-photos').upload(path, file, { upsert:false });
-    if(upErr){
-      console.warn('Foto-Upload fehlgeschlagen:', upErr.message);
-      showToastMsg('Foto konnte nicht hochgeladen werden: ' + upErr.message);
-      continue;
+  const result=[];
+  for(const photo of photos){
+    if(!photo.storagePath){
+      const ext=(photo.file?.name.split('.').pop()||'jpg').toLowerCase().replace(/[^a-z0-9]/g,'');
+      const path=`${listingId}/${crypto.randomUUID()}.${ext}`;
+      const {error}=await supabaseClient.storage.from('listing-photos').upload(path,photo.file,{upsert:false});
+      if(error)throw error;
+      photo.storagePath=path;
     }
-    const { data: urlData } = supabaseClient.storage.from('listing-photos').getPublicUrl(path);
-    const { error: rowErr } = await supabaseClient.from('listing_photos').insert({ listing_id: listingId, storage_path: path, sort_order: i });
-    if(rowErr){
-      console.warn('Foto-Datenbankeintrag fehlgeschlagen:', rowErr.message);
-      showToastMsg('Foto gespeichert, aber Verknüpfung fehlgeschlagen: ' + rowErr.message);
-      continue;
-    }
-    urls.push(urlData.publicUrl);
+    const {data}=supabaseClient.storage.from('listing-photos').getPublicUrl(photo.storagePath);
+    result.push({storagePath:photo.storagePath,url:data.publicUrl});
   }
-  return urls;
+  const {error}=await supabaseClient.rpc('replace_listing_photos',{p_listing_id:listingId,p_paths:result.map(p=>p.storagePath)});
+  if(error)throw error;
+  return result;
 }
-
-document.getElementById('publishBtn').addEventListener('click', async ()=>{
-  const title = document.getElementById('formTitle').value.trim();
-  const has = document.getElementById('formHas').value.trim();
-  const wants = document.getElementById('formWants').value.trim();
-  const price = document.getElementById('formPrice').value.trim();
-  const ort = document.getElementById('formOrt').value.trim();
-  if(!ort){ showToastMsg('Bitte einen Ort eingeben.'); return; }
-  const locationFields = {latitude:listingLocation?.lat ?? null, longitude:listingLocation?.lng ?? null};
-
-  let valid = true;
-  document.getElementById('errTitle').classList.toggle('show', !title);
-  document.getElementById('errHas').classList.toggle('show', !has);
-  if(!title || !has) valid = false;
-  if(formMode==='tausch'){
-    document.getElementById('errWants').classList.toggle('show', !wants);
-    if(!wants) valid = false;
-  } else {
-    document.getElementById('errPrice').classList.toggle('show', !price);
-    if(!price) valid = false;
+let publishingListing=false;
+document.getElementById('publishBtn').addEventListener('click',async()=>{
+  if(publishingListing)return;
+  const title=document.getElementById('formTitle').value.trim();
+  const has=document.getElementById('formHas').value.trim();
+  const wants=document.getElementById('formWants').value.trim();
+  const price=document.getElementById('formPrice').value.trim();
+  const ort=document.getElementById('formOrt').value.trim();
+  const errors={errTitle:!title,errHas:!has,errWants:formMode==='tausch'&&!wants,errPrice:formMode==='verkauf'&&(!price||!Number.isFinite(Number(price))||Number(price)<0)};
+  Object.entries(errors).forEach(([id,error])=>document.getElementById(id).classList.toggle('show',error));
+  if(Object.values(errors).some(Boolean))return;
+  if(!ort){showToastMsg('Bitte einen Ort eingeben.');return;}
+  if(!supabaseClient){showToastMsg('Zum Speichern ist eine Datenbankverbindung erforderlich.');return;}
+  publishingListing=true;
+  const button=document.getElementById('publishBtn'),originalLabel=button.textContent;
+  button.disabled=true;
+  const form=document.querySelector('#view-create .form-scroll');form.inert=true;
+  try{
+    const user=await requireAuth();if(!user)return;
+    const values={game:formGame,category:formCategory,mode:formMode,title,has_text:has,wants_text:formMode==='tausch'?wants:null,price:formMode==='verkauf'?Number(price):null,city:ort,latitude:listingLocation?.lat??null,longitude:listingLocation?.lng??null};
+    button.textContent='Wird gespeichert …';
+    let id=editingListingId;
+    if(id){
+      const {data,error}=await supabaseClient.from('listings').update(values).eq('id',id).select('id').single();
+      if(error)throw error;if(!data)throw new Error('Keine Berechtigung.');
+    }else{
+      const {data,error}=await supabaseClient.from('listings').insert({...values,owner_id:user.id,status:'aktiv'}).select('id').single();
+      if(error)throw error;
+      id=data.id;editingListingId=id; // Retry updates this same listing after a failed photo upload.
+    }
+    button.textContent='Fotos werden gespeichert …';
+    const photos=await uploadListingPhotos(id,formPhotos);
+    await loadListingsFromSupabase();
+    if(!listings.some(l=>String(l.id)===String(id))){throw new Error('Gespeichert, aber die Anzeige konnte noch nicht geladen werden. Bitte erneut versuchen.');}
+    const listing=listings.find(l=>String(l.id)===String(id));listing.photos=photos;listing.photoUrl=photos[0]?.url;
+    editingListingId=null;
+    showToastMsg('Inserat und Fotos gespeichert');openDetail(id);
+  }catch(error){
+    showToastMsg('Speichern nicht vollständig: '+(error.message||'Bitte erneut versuchen.'));
+  }finally{
+    publishingListing=false;button.disabled=false;button.textContent=originalLabel;form.inert=false;
   }
-  if(!valid) return;
-
-  const publishBtn = document.getElementById('publishBtn');
-  const originalBtnLabel = publishBtn.textContent;
-  const newFiles = formPhotos.filter(p=>p.file); // nur echte, neu ausgewählte Dateien hochladen
-  const keepingExistingPhoto = formPhotos.some(p=>p.existing);
-
-  /* ---------------- Bearbeiten einer bestehenden Anzeige ---------------- */
-  if(editingListingId){
-    const listing = listings.find(l=>String(l.id)===String(editingListingId));
-    if(!listing) return;
-
-    if(supabaseClient && currentUser){
-      publishBtn.disabled = true; publishBtn.textContent = 'Wird gespeichert …';
-      const { error } = await supabaseClient.from('listings').update({
-        game: formGame, category: formCategory, mode: formMode, title,
-        has_text: has, wants_text: formMode==='tausch' ? wants : null,
-        price: formMode==='verkauf' ? parseFloat(price) : null, city: ort, ...locationFields
-      }).eq('id', editingListingId);
-
-      if(error){
-        publishBtn.disabled = false; publishBtn.textContent = originalBtnLabel;
-        showToastMsg('Fehler beim Speichern: ' + error.message);
-        return;
-      }
-
-      let photoUrl = listing.photoUrl;
-      if(newFiles.length){
-        publishBtn.textContent = 'Fotos werden hochgeladen …';
-        await supabaseClient.from('listing_photos').delete().eq('listing_id', editingListingId);
-        const uploadedUrls = await uploadListingPhotos(editingListingId, newFiles);
-        photoUrl = uploadedUrls[0] || undefined;
-      } else if(!keepingExistingPhoto && listing.photoUrl){
-        await supabaseClient.from('listing_photos').delete().eq('listing_id', editingListingId);
-        photoUrl = undefined;
-      }
-      publishBtn.disabled = false; publishBtn.textContent = originalBtnLabel;
-
-      listing.photoUrl = photoUrl;
-    } else if(newFiles.length){
-      listing.photoUrl = newFiles[0].previewUrl;
-    } else if(!keepingExistingPhoto){
-      listing.photoUrl = undefined;
-    }
-
-    Object.assign(listing, {
-      game: formGame, category: formCategory, mode: formMode, title, has,
-      ort, ...locationFields,
-      wants: formMode==='tausch' ? wants : null,
-      preis: formMode==='verkauf' ? price+' €' : undefined
-    });
-
-    showToastMsg('Änderungen gespeichert');
-    editingListingId = null;
-    renderFeed();
-    renderProfile();
-    openDetail(listing.id);
-    return;
-  }
-
-  /* ---------------- Neue Anzeige erstellen ---------------- */
-  let ownerId = 'demo';
-  let sellerInfo = {name:'Max J.', rating:'4.9★ · 14 Trades'};
-  let newId = String(Date.now());
-  let photoUrl = formPhotos[0] ? formPhotos[0].previewUrl : null; // lokale Vorschau als Fallback
-
-  if(supabaseClient){
-    const user = await requireAuth();
-    if(!user) return; // Login abgebrochen oder E-Mail-Bestätigung ausstehend
-
-    publishBtn.disabled = true; publishBtn.textContent = 'Wird veröffentlicht …';
-
-    const { data, error } = await supabaseClient
-      .from('listings')
-      .insert({
-        owner_id: user.id,
-        game: formGame,
-        category: formCategory,
-        mode: formMode,
-        status: 'aktiv',
-        title,
-        has_text: has,
-        wants_text: formMode==='tausch' ? wants : null,
-        price: formMode==='verkauf' ? parseFloat(price) : null,
-        city: ort,
-        ...locationFields
-      })
-      .select()
-      .single();
-
-    if(error){
-      publishBtn.disabled = false; publishBtn.textContent = originalBtnLabel;
-      showToastMsg('Fehler beim Speichern: ' + error.message);
-      return;
-    }
-
-    newId = data.id;
-    ownerId = user.id;
-
-    if(newFiles.length > 0){
-      publishBtn.textContent = 'Fotos werden hochgeladen …';
-      const uploadedUrls = await uploadListingPhotos(newId, newFiles);
-      if(uploadedUrls.length > 0) photoUrl = uploadedUrls[0];
-    }
-
-    publishBtn.disabled = false; publishBtn.textContent = originalBtnLabel;
-
-    const { data: profile } = await supabaseClient
-      .from('profiles')
-      .select('display_name, rating_avg, rating_count')
-      .eq('id', user.id)
-      .single();
-    if(profile){
-      sellerInfo = { name: profile.display_name, rating: `${profile.rating_avg}★ · ${profile.rating_count} Trades` };
-    }
-  }
-
-  const newListing = {
-    id: newId,
-    ownerId,
-    postedHoursAgo: 0,
-    game: formGame,
-    category: formCategory,
-    mode: formMode,
-    status: 'aktiv',
-    mine: true,
-    title,
-    photoUrl: photoUrl || undefined,
-    thumbGrad: photoGradients[listings.length % photoGradients.length],
-    thumbLabel: title.split(' ').map(w=>w[0]).join('').slice(0,3).toUpperCase(),
-    has,
-    wants: formMode==='tausch' ? wants : null,
-    preis: formMode==='verkauf' ? price+' €' : undefined,
-    ort,
-    ...locationFields,
-    zeit: 'gerade eben',
-    seller: sellerInfo
-  };
-  listings.unshift(newListing);
-
-  const toast = document.getElementById('toast');
-  toast.classList.add('show');
-  setTimeout(()=>toast.classList.remove('show'), 1600);
-
-  renderFeed();
-  renderProfile();
-  setTimeout(()=>openDetail(newListing.id), 550);
 });
 
 /* ---------------- Generisches Sheet ---------------- */
@@ -2882,49 +2777,40 @@ function showMapCard(id){
 }
 
 /* ---------------- Händlerprofil ---------------- */
-function openShopProfile(sellerName){
-  const shop = SHOPS[sellerName];
-  const items = listings.filter(l=>l.status==='aktiv' && l.seller.name===sellerName);
-  const mapsUrl = 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(shop.address);
-  document.getElementById('shopScroll').innerHTML = `
-    <div class="profile-head">
-      <div class="shop-avatar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9h16l-1.5-4h-13L4 9Z"/><path d="M5 9v10h14V9"/><path d="M9 19v-5h6v5"/></svg></div>
-      <div class="profile-name">${shop.shopName}</div>
-      <div class="profile-sub">${sellerBadgeHTML({type:'shop'})} betrieben von ${sellerName}</div>
-      <div class="stat-row">
-        <div class="stat"><div class="stat-num">${items.length}</div><div class="stat-label">Verfügbar</div></div>
-        <div class="stat"><div class="stat-num">${listings.find(l=>l.seller.name===sellerName).seller.rating.split(' ')[0]}</div><div class="stat-label">Bewertung</div></div>
-      </div>
-    </div>
-    <div style="height:14px;"></div>
-    <div class="shop-info-row">
-      <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-6.5-5.2-8.5-9.2A5.5 5.5 0 0 1 12 4a5.5 5.5 0 0 1 8.5 7.8C18.5 15.8 12 21 12 21Z"/><circle cx="12" cy="10.5" r="2"/></svg>
-      <div><div class="shop-info-title">${shop.address}</div><div class="shop-info-sub">Abholadresse für Reservierungen</div></div>
-    </div>
-    <div class="shop-info-row">
-      <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
-      <div><div class="shop-info-title">${shop.hours}</div><div class="shop-info-sub">Öffnungszeiten</div></div>
-    </div>
-    <div class="detail-block" style="margin:0 16px 12px;">
-      <div class="detail-block-text">${shop.desc}</div>
-    </div>
-    <div class="shop-link-row">
-      <a class="shop-link-btn" href="${mapsUrl}" target="_blank" rel="noopener noreferrer">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 20 3 17V7l6 3m0 10 6-3m-6 3V10m6 7 6-3V4l-6 3m0 10V7m0 0L9 4"/></svg>
-        Route planen
-      </a>
-    </div>
-    <div class="shop-section-label">Verfügbare Produkte</div>
-    <div class="profile-list" id="shopItemList"></div>
-  `;
-  const list = document.getElementById('shopItemList');
-  list.innerHTML = items.length
-    ? items.map(l=>listingCardHTML(l)).join('')
-    : `<div class="empty-state">Aktuell keine aktiven Anzeigen.</div>`;
-  wireListingCards(list);
-  showView('shop');
+let dealerRows=[],shopBackView='dealers',dealerLoadVersion=0;
+function escapeHTML(value){return String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+async function loadDealers(){
+  const version=++dealerLoadVersion,root=document.getElementById('dealerList');root.textContent='Händler werden geladen …';
+  if(!supabaseClient){root.textContent='Händler sind gerade nicht verfügbar.';return;}
+  const {data,error}=await supabaseClient.from('shops').select('id,owner_id,shop_name,address,opening_hours,description').order('shop_name');
+  if(version!==dealerLoadVersion)return;
+  if(error){root.textContent='Händler konnten nicht geladen werden. Bitte später erneut versuchen.';return;}
+  dealerRows=data||[];renderDealers();
 }
-document.getElementById('shopBackBtn').addEventListener('click', ()=>showView('detail'));
+function renderDealers(){
+  const root=document.getElementById('dealerList'),q=document.getElementById('dealerSearch').value.trim().toLocaleLowerCase('de');
+  const rows=dealerRows.filter(r=>(r.shop_name+' '+(r.address||'')).toLocaleLowerCase('de').includes(q));root.replaceChildren();
+  if(!rows.length){root.innerHTML='<div class="empty-state">'+(dealerRows.length?'Keine passenden Händler gefunden.':'Noch keine Händler registriert.')+'</div>';return;}
+  rows.forEach(shop=>{
+    const button=document.createElement('button');button.className='dealer-row';
+    button.innerHTML='<span class="dealer-symbol">'+escapeHTML(initials(shop.shop_name))+'</span><span><strong>'+escapeHTML(shop.shop_name)+'</strong><small>'+escapeHTML(shop.address||'Kein Ort angegeben')+'</small></span><span aria-hidden="true">→</span>';
+    button.onclick=()=>openShopProfile(shop.owner_id,'dealers');root.appendChild(button);
+  });
+}
+document.getElementById('dealerSearch').addEventListener('input',renderDealers);
+async function openShopProfile(ownerId,from='dealers'){
+  shopBackView=from;showView('shop');const root=document.getElementById('shopScroll');root.textContent='Händlerprofil wird geladen …';
+  if(!ownerId||!supabaseClient){root.textContent='Händlerprofil nicht verfügbar.';return;}
+  const {data:shop,error}=await supabaseClient.from('shops').select('shop_name,address,opening_hours,description').eq('owner_id',ownerId).maybeSingle();
+  if(error||!shop){root.textContent='Für diesen Händler ist noch kein Geschäftsprofil hinterlegt.';return;}
+  await loadListingsFromSupabase();
+  const items=listings.filter(l=>l.status==='aktiv'&&l.ownerId===ownerId);
+  root.innerHTML=`<div class="profile-head"><div class="profile-name">${escapeHTML(shop.shop_name)}</div><div class="profile-sub">Händler · ${items.length} aktive Inserate</div></div>
+    <div class="detail-block"><div class="field-label">Standort</div><p>${escapeHTML(shop.address||'Nicht angegeben')}</p>${shop.opening_hours?'<div class="field-label">Öffnungszeiten</div><p>'+escapeHTML(shop.opening_hours)+'</p>':''}${shop.description?'<p style="white-space:pre-wrap">'+escapeHTML(shop.description)+'</p>':''}</div>
+    <div class="shop-section-label">Inserate dieses Händlers</div><div class="profile-list" id="shopItemList"></div>`;
+  const list=document.getElementById('shopItemList');list.innerHTML=items.length?items.map(l=>listingCardHTML(l)).join(''):'<div class="empty-state">Aktuell keine aktiven Inserate.</div>';wireListingCards(list);
+}
+document.getElementById('shopBackBtn').addEventListener('click',()=>showView(shopBackView));
 
 /* ---------------- Reservierung beim Händler anfragen ---------------- */
 async function openReserveSheet(listing){
@@ -3011,7 +2897,7 @@ async function loadListingsFromSupabase(){
       .order('created_at', { ascending:false });
 
     if(error){ console.warn('Konnte Anzeigen nicht laden, bleibe bei Demo-Daten:', error.message); return; }
-    if(!data || data.length === 0) return; // noch keine echten Anzeigen -> Demo-Daten bleiben sichtbar
+    if(!data || data.length===0){listings.length=0;renderFeed();renderProfile();return;}
 
     const listingIds = data.map(row=>row.id);
     const { data: photoRows } = await supabaseClient
@@ -3019,12 +2905,10 @@ async function loadListingsFromSupabase(){
       .select('listing_id, storage_path, sort_order')
       .in('listing_id', listingIds)
       .order('sort_order', { ascending:true });
-    const photoUrlByListing = {};
+    const photosByListing = {};
     (photoRows||[]).forEach(p=>{
-      if(!photoUrlByListing[p.listing_id]){
-        const { data: urlData } = supabaseClient.storage.from('listing-photos').getPublicUrl(p.storage_path);
-        photoUrlByListing[p.listing_id] = urlData.publicUrl;
-      }
+      const {data}=supabaseClient.storage.from('listing-photos').getPublicUrl(p.storage_path);
+      (photosByListing[p.listing_id] ||= []).push({url:data.publicUrl,storagePath:p.storage_path});
     });
 
     const mapped = data.map(row=>{
@@ -3040,7 +2924,8 @@ async function loadListingsFromSupabase(){
         status: row.status,
         mine: myId ? row.owner_id === myId : false,
         ownerId: row.owner_id,
-        photoUrl: photoUrlByListing[row.id] || undefined,
+        photos: photosByListing[row.id] || [],
+        photoUrl: photosByListing[row.id]?.[0]?.url,
         title: row.title,
         thumbGrad: photoGradients[Math.abs(hashCode(row.id)) % photoGradients.length],
         thumbLabel: row.title.split(' ').map(w=>w[0]).join('').slice(0,3).toUpperCase(),
@@ -3458,6 +3343,35 @@ async function deleteListing(id){
   renderMap();
   if(document.getElementById('view-detail').classList.contains('active')) showView('profile');
 }
+
+function photoURLs(listing){return listing.photos?.length?listing.photos.map(p=>p.url):(listing.photoUrl?[listing.photoUrl]:[]);}
+function listingGalleryHTML(listing){
+  const urls=photoURLs(listing);if(!urls.length)return thumbHTML(listing,'lg');
+  return `<button class="detail-photo-open" id="detailPhotoOpen" aria-label="Foto vergrößern"><img src="${escapeHTML(urls[0])}" alt="${escapeHTML(listing.title)}"><span>${urls.length} Foto${urls.length===1?'':'s'} · Vergrößern</span></button><div class="detail-photo-thumbs">${urls.map((url,i)=>`<button data-photo-index="${i}" aria-label="Foto ${i+1} öffnen"><img src="${escapeHTML(url)}" alt="" loading="lazy"></button>`).join('')}</div>`;
+}
+function wireDetailGallery(listing){
+  document.getElementById('detailPhotoOpen')?.addEventListener('click',()=>openPhotoViewer(listing,0));
+  document.querySelectorAll('[data-photo-index]').forEach(b=>b.onclick=()=>openPhotoViewer(listing,Number(b.dataset.photoIndex)));
+}
+let viewerPhotos=[],viewerIndex=0,viewerTitle='',viewerFocus=null;
+const viewer=document.getElementById('photoViewer');
+function openPhotoViewer(listing,index){
+  viewerPhotos=photoURLs(listing);if(!viewerPhotos.length)return;viewerIndex=index;viewerTitle=listing.title;viewerFocus=document.activeElement;renderViewer();viewer.showModal();document.getElementById('viewerClose').focus();
+}
+function renderViewer(){
+  const image=document.getElementById('viewerImage');image.src=viewerPhotos[viewerIndex];image.alt=viewerTitle+' – Foto '+(viewerIndex+1);
+  document.getElementById('viewerCount').textContent=(viewerIndex+1)+' / '+viewerPhotos.length;
+  document.getElementById('viewerPrev').hidden=viewerPhotos.length<2;document.getElementById('viewerNext').hidden=viewerPhotos.length<2;
+}
+function stepPhoto(step){viewerIndex=(viewerIndex+step+viewerPhotos.length)%viewerPhotos.length;renderViewer();}
+document.getElementById('viewerClose').onclick=()=>viewer.close();
+document.getElementById('viewerPrev').onclick=()=>stepPhoto(-1);document.getElementById('viewerNext').onclick=()=>stepPhoto(1);
+viewer.addEventListener('close',()=>viewerFocus?.focus());
+viewer.addEventListener('click',e=>{if(e.target===viewer)viewer.close();});
+viewer.addEventListener('keydown',e=>{if(e.key==='ArrowLeft'||e.key==='ArrowRight'){e.preventDefault();stepPhoto(e.key==='ArrowLeft'?-1:1);}});
+let touchStart=null;
+viewer.addEventListener('touchstart',e=>{touchStart=e.touches.length===1?{x:e.touches[0].clientX,y:e.touches[0].clientY}:null;},{passive:true});
+viewer.addEventListener('touchend',e=>{if(!touchStart)return;const dx=e.changedTouches[0].clientX-touchStart.x,dy=e.changedTouches[0].clientY-touchStart.y;if(Math.abs(dx)>50&&Math.abs(dx)>Math.abs(dy)*1.5)stepPhoto(dx<0?1:-1);touchStart=null;},{passive:true});
 
 /* ---------------- Init ---------------- */
 renderFeed();
