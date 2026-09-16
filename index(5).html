@@ -846,6 +846,8 @@
   #photoViewer::backdrop{background:#000e;}#photoViewer[open]{display:flex;align-items:center;justify-content:center;}#viewerImage{max-width:100%;max-height:100%;object-fit:contain;}
   #photoViewer button{position:absolute;width:44px;height:44px;background:#ffffff24;color:white;border:1px solid #ffffff40;border-radius:50%;font-size:28px;cursor:pointer;}#photoViewer button[hidden]{display:none;}#viewerClose{top:14px;right:14px;}#viewerPrev{left:6px;top:50%;}#viewerNext{right:6px;top:50%;}#viewerCount{position:absolute;bottom:20px;left:0;right:0;text-align:center;}
   @media(max-width:599px){.navbar{padding-left:3px;padding-right:3px;gap:0;}.navitem{min-width:0;font-size:10px;padding-left:3px;padding-right:3px;}.detail-photo-open>img{height:240px;}#photoViewer{padding:60px 8px;}#viewerPrev,#viewerNext{z-index:1;}}
+
+ .tool-body{padding:20px 18px 100px;}.tool-actions{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0;}.tool-actions .btn{flex:1 1 140px;}.tool-row{padding:20px 0;border-bottom:1px solid var(--line);}.tool-row p{font-size:13px;color:var(--muted);line-height:1.6;overflow-wrap:anywhere;}.tool-row a{color:var(--forest);}.tool-body h3{font-family:'Sora',sans-serif;font-size:18px;}.tool-body label,.sheet label{display:block;margin-top:14px;font-size:13px;}.tool-body label input,.sheet label input{margin-top:6px;}.menu-button{width:100%;background:none;border:0;color:var(--ink);font:inherit;text-align:left;}.menu-button[hidden]{display:none;}.table-scroll{overflow-x:auto;}.inventory-table{border-collapse:collapse;width:100%;font-size:13px;}.inventory-table td,.inventory-table th{padding:12px 8px;border-bottom:1px solid var(--line);text-align:left;}.inventory-table input{width:85px;}.inventory-table input,.inventory-table select{background:var(--card-bg);color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:8px;}#noticeCount{color:var(--forest);}#shopExtras{padding-bottom:12px;}
 </style>
 </head>
 <body>
@@ -1003,6 +1005,12 @@
       <div class="field-hint" id="authHint" style="display:none; text-align:center; padding:10px 20px 0;"></div>
 
       <div class="menu-section">
+        <button class="menu-row menu-button" id="openNotifications">Benachrichtigungen<span id="noticeCount"></span></button>
+        <button class="menu-row menu-button" id="openMyReservations">Meine Reservierungen</button>
+        <button class="menu-row menu-button" id="openDealerTools" hidden>Händlerbereich</button>
+        <button class="menu-row menu-button" id="openDealerReviews" hidden>Händler prüfen (Admin)</button>
+      </div>
+      <div class="menu-section">
         <div class="menu-row" data-plist="aktiv">
           <div class="menu-icon" style="background:#F0B429;"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h10"/></svg></div>
           <div class="menu-label">Meine Anzeigen</div>
@@ -1043,6 +1051,10 @@
     </div>
   </div>
 
+  <div class="view" id="view-dealer-tools"><div class="subheader"><button class="back-btn" data-back="profile">←</button><div class="subheader-title">Händlerbereich</div></div><div class="filters"><button class="chip" data-dealer-panel="inventory">Bestand & CSV</button><button class="chip" data-dealer-panel="reservations">Anfragen</button><button class="chip" data-dealer-panel="events">Veranstaltungen</button><button class="chip" data-dealer-panel="verification">Händlerprüfung</button></div><div class="profile-scroll tool-body" id="dealerToolBody"></div></div>
+  <div class="view" id="view-reservations"><div class="subheader"><button class="back-btn" data-back="profile">←</button><div class="subheader-title">Reservierungen</div></div><div class="profile-scroll tool-body" id="reservationList"></div></div>
+  <div class="view" id="view-notifications"><div class="subheader"><button class="back-btn" data-back="profile">←</button><div class="subheader-title">Benachrichtigungen</div></div><div class="profile-scroll tool-body" id="notificationList"></div></div>
+  <div class="view" id="view-dealer-reviews"><div class="subheader"><button class="back-btn" data-back="profile">←</button><div class="subheader-title">Händler prüfen</div></div><div class="profile-scroll tool-body" id="dealerReviewList"></div></div>
   <!-- ============ PERSONENPROFIL (aus Chat) ============ -->
   <div class="view" id="view-person">
     <div class="subheader">
@@ -1160,6 +1172,11 @@
         <div class="field-error" id="errPrice">Bitte einen Preis angeben.</div>
       </div>
 
+      <div class="field">
+        <div class="field-label">Freier Bestand (Stück)</div>
+        <input class="text-input" id="formStock" type="number" min="0" step="1" value="1">
+        <div class="field-hint">Bereits bestätigte Reservierungen sind nicht im freien Bestand enthalten.</div>
+      </div>
       <div class="field">
         <div class="field-label">Standort</div>
         <input class="text-input" id="formOrt" value="Graz">
@@ -1606,7 +1623,7 @@ function openDetail(id){
       </button>
       ${l.boosted ? `<div class="boost-tag"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2 9 9l-7 1 5 5-1 7 6-3 6 3-1-7 5-5-7-1Z"/></svg>Hervorgehoben</div>` : ''}
     </div>
-    <div class="detail-title">${l.title}</div>
+    <div class="detail-title">${l.title}</div><p class="field-hint">${l.stock??1} Stück frei verfügbar</p>
     <div class="detail-meta-row">
       <div class="tag-mode ${l.mode==='tausch'?'tausch':'verkauf'}">${l.mode==='tausch'?'Tausch':'Verkauf'}</div>
       <div class="meta">📍 ${l.ort} · ${l.zeit}</div>
@@ -2078,6 +2095,9 @@ async function updateAuthUI(){
   const { data: { session } } = await supabaseClient.auth.getSession();
   currentUser = session && session.user ? session.user : null;
   guestBar.style.display = currentUser ? 'none' : 'flex';
+  document.getElementById('openDealerReviews').hidden=!isAdmin();
+  document.getElementById('openDealerTools').hidden=true;
+  refreshNoticeCount();
 
   if(currentUser){
     authLabel.textContent = 'Ausloggen';
@@ -2087,11 +2107,12 @@ async function updateAuthUI(){
 
     const { data: profile } = await supabaseClient
       .from('profiles')
-      .select('display_name, city, member_since, rating_avg, rating_count, avatar_url')
+      .select('display_name, city, member_since, rating_avg, rating_count, avatar_url, is_shop')
       .eq('id', currentUser.id)
       .single();
 
     if(profile){
+      document.getElementById('openDealerTools').hidden=!profile.is_shop;
       const avatarEl = document.getElementById('profileAvatar');
       if(profile.avatar_url){
         avatarEl.style.backgroundImage = `url('${profile.avatar_url}')`;
@@ -2245,6 +2266,7 @@ function openCreateForm(){
   document.getElementById('formHas').value = '';
   document.getElementById('formWants').value = '';
   document.getElementById('formPrice').value = '';
+  document.getElementById('formStock').value = '1';
   document.getElementById('formOrt').value = '';
   setListingLocation(null);
   ['errTitle','errHas','errWants','errPrice'].forEach(id=>document.getElementById(id).classList.remove('show'));
@@ -2271,6 +2293,7 @@ function openEditForm(listing){
   document.getElementById('formHas').value = listing.has || '';
   document.getElementById('formWants').value = listing.wants || '';
   document.getElementById('formPrice').value = listing.preis ? parseFloat(listing.preis) : '';
+  document.getElementById('formStock').value = listing.stock??1;
   document.getElementById('formOrt').value = (listing.ort || '').split(' · ')[0];
   setListingLocation(validLocation(listing) ? {lat:listing.latitude,lng:listing.longitude} : null);
 
@@ -2430,6 +2453,8 @@ document.getElementById('publishBtn').addEventListener('click',async()=>{
   Object.entries(errors).forEach(([id,error])=>document.getElementById(id).classList.toggle('show',error));
   if(Object.values(errors).some(Boolean))return;
   if(!ort){showToastMsg('Bitte einen Ort eingeben.');return;}
+  const stock=Number(document.getElementById('formStock').value);
+  if(document.getElementById('formStock').value===''||!Number.isInteger(stock)||stock<0||stock>2147483647){showToastMsg('Bitte einen gültigen Bestand eingeben.');return;}
   if(!supabaseClient){showToastMsg('Zum Speichern ist eine Datenbankverbindung erforderlich.');return;}
   publishingListing=true;
   const button=document.getElementById('publishBtn'),originalLabel=button.textContent;
@@ -2437,7 +2462,7 @@ document.getElementById('publishBtn').addEventListener('click',async()=>{
   const form=document.querySelector('#view-create .form-scroll');form.inert=true;
   try{
     const user=await requireAuth();if(!user)return;
-    const values={game:formGame,category:formCategory,mode:formMode,title,has_text:has,wants_text:formMode==='tausch'?wants:null,price:formMode==='verkauf'?Number(price):null,city:ort,latitude:listingLocation?.lat??null,longitude:listingLocation?.lng??null};
+    const values={stock,game:formGame,category:formCategory,mode:formMode,title,has_text:has,wants_text:formMode==='tausch'?wants:null,price:formMode==='verkauf'?Number(price):null,city:ort,latitude:listingLocation?.lat??null,longitude:listingLocation?.lng??null};
     button.textContent='Wird gespeichert …';
     let id=editingListingId;
     if(id){
@@ -2782,7 +2807,7 @@ function escapeHTML(value){return String(value??'').replace(/[&<>"']/g,c=>({'&':
 async function loadDealers(){
   const version=++dealerLoadVersion,root=document.getElementById('dealerList');root.textContent='Händler werden geladen …';
   if(!supabaseClient){root.textContent='Händler sind gerade nicht verfügbar.';return;}
-  const {data,error}=await supabaseClient.from('shops').select('id,owner_id,shop_name,address,opening_hours,description').order('shop_name');
+  const {data,error}=await supabaseClient.from('shops').select('id,owner_id,shop_name,address,opening_hours,description,is_verified').order('shop_name');
   if(version!==dealerLoadVersion)return;
   if(error){root.textContent='Händler konnten nicht geladen werden. Bitte später erneut versuchen.';return;}
   dealerRows=data||[];renderDealers();
@@ -2793,7 +2818,7 @@ function renderDealers(){
   if(!rows.length){root.innerHTML='<div class="empty-state">'+(dealerRows.length?'Keine passenden Händler gefunden.':'Noch keine Händler registriert.')+'</div>';return;}
   rows.forEach(shop=>{
     const button=document.createElement('button');button.className='dealer-row';
-    button.innerHTML='<span class="dealer-symbol">'+escapeHTML(initials(shop.shop_name))+'</span><span><strong>'+escapeHTML(shop.shop_name)+'</strong><small>'+escapeHTML(shop.address||'Kein Ort angegeben')+'</small></span><span aria-hidden="true">→</span>';
+    button.innerHTML='<span class="dealer-symbol">'+escapeHTML(initials(shop.shop_name))+'</span><span><strong>'+escapeHTML(shop.shop_name)+'</strong> '+dealerBadge(shop)+'<small>'+escapeHTML(shop.address||'Kein Ort angegeben')+'</small></span><span aria-hidden="true">→</span>';
     button.onclick=()=>openShopProfile(shop.owner_id,'dealers');root.appendChild(button);
   });
 }
@@ -2801,82 +2826,17 @@ document.getElementById('dealerSearch').addEventListener('input',renderDealers);
 async function openShopProfile(ownerId,from='dealers'){
   shopBackView=from;showView('shop');const root=document.getElementById('shopScroll');root.textContent='Händlerprofil wird geladen …';
   if(!ownerId||!supabaseClient){root.textContent='Händlerprofil nicht verfügbar.';return;}
-  const {data:shop,error}=await supabaseClient.from('shops').select('shop_name,address,opening_hours,description').eq('owner_id',ownerId).maybeSingle();
+  const {data:shop,error}=await supabaseClient.from('shops').select('shop_name,address,opening_hours,description,is_verified').eq('owner_id',ownerId).maybeSingle();
   if(error||!shop){root.textContent='Für diesen Händler ist noch kein Geschäftsprofil hinterlegt.';return;}
   await loadListingsFromSupabase();
   const items=listings.filter(l=>l.status==='aktiv'&&l.ownerId===ownerId);
-  root.innerHTML=`<div class="profile-head"><div class="profile-name">${escapeHTML(shop.shop_name)}</div><div class="profile-sub">Händler · ${items.length} aktive Inserate</div></div>
+  root.innerHTML=`<div class="profile-head"><div class="profile-name">${escapeHTML(shop.shop_name)}</div><div class="profile-sub">${dealerBadge(shop)} · ${items.length} aktive Inserate</div></div>
     <div class="detail-block"><div class="field-label">Standort</div><p>${escapeHTML(shop.address||'Nicht angegeben')}</p>${shop.opening_hours?'<div class="field-label">Öffnungszeiten</div><p>'+escapeHTML(shop.opening_hours)+'</p>':''}${shop.description?'<p style="white-space:pre-wrap">'+escapeHTML(shop.description)+'</p>':''}</div>
-    <div class="shop-section-label">Inserate dieses Händlers</div><div class="profile-list" id="shopItemList"></div>`;
+    <div id="shopExtras" class="tool-body"></div><div class="shop-section-label">Inserate dieses Händlers</div><div class="profile-list" id="shopItemList"></div>`;
   const list=document.getElementById('shopItemList');list.innerHTML=items.length?items.map(l=>listingCardHTML(l)).join(''):'<div class="empty-state">Aktuell keine aktiven Inserate.</div>';wireListingCards(list);
+  await addShopExtras(ownerId,shop);
 }
 document.getElementById('shopBackBtn').addEventListener('click',()=>showView(shopBackView));
-
-/* ---------------- Reservierung beim Händler anfragen ---------------- */
-async function openReserveSheet(listing){
-  let shop = SHOPS[listing.seller.name];
-  if(supabaseClient && currentUser){
-    const { data: shopRow } = await supabaseClient.from('shops').select('shop_name,address,opening_hours').eq('owner_id', listing.seller.id).maybeSingle();
-    if(shopRow) shop = { shopName: shopRow.shop_name, address: shopRow.address, hours: shopRow.opening_hours };
-  }
-  if(!shop){ showToastMsg('Für diesen Händler sind noch keine Abholdaten hinterlegt.'); return; }
-  openSheet(`
-    <button class="sheet-close" onclick="closeSheet()">✕</button>
-    <div class="sheet-title">Reservierung anfragen</div>
-    <div class="sheet-sub">Wir schicken ${shop.shopName} eine Anfrage für „${listing.title}". Der Laden entscheidet, ob er reservieren kann – erst mit deren Zusage ist es verbindlich.</div>
-    <div class="shop-info-row" style="margin:0 0 9px;">
-      <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-6.5-5.2-8.5-9.2A5.5 5.5 0 0 1 12 4a5.5 5.5 0 0 1 8.5 7.8C18.5 15.8 12 21 12 21Z"/><circle cx="12" cy="10.5" r="2"/></svg>
-      <div><div class="shop-info-title">${shop.shopName}</div><div class="shop-info-sub">${shop.address}</div></div>
-    </div>
-    <div class="shop-info-row" style="margin:0 0 9px;">
-      <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
-      <div><div class="shop-info-title">${shop.hours}</div><div class="shop-info-sub">Öffnungszeiten</div></div>
-    </div>
-    <button class="btn btn-primary" style="width:100%; margin-top:6px;" id="confirmReserveBtn">Anfrage senden</button>
-  `);
-  document.getElementById('confirmReserveBtn').addEventListener('click', ()=>requestReservation(listing, shop));
-}
-async function requestReservation(listing, shop){
-  closeSheet();
-  if(supabaseClient && currentUser){
-    const convo = await getOrCreateConversation({
-      listingId: listing.id, otherId: listing.seller.id, otherName: listing.seller.name, sub:'Zu: '+listing.title
-    });
-    if(!convo) return;
-    convo.shopInfo = shop; convo.shopInfoChecked = true;
-    const { data, error } = await supabaseClient.from('messages').insert({
-      conversation_id: convo.id, sender_id: currentUser.id, type:'reserve', reserve_status:'pending'
-    }).select().single();
-    if(error){ showToastMsg('Fehler: ' + error.message); return; }
-    convo.messages.push(mapDbMessage(data, convo));
-    convo.time = 'gerade eben';
-    renderChatlist();
-    openChat(convo.id);
-    showToastMsg('Anfrage an ' + shop.shopName + ' gesendet');
-    return;
-  }
-
-  let convo = conversations.find(c=>c.listingId===listing.id && c.partner===listing.seller.name);
-  if(!convo){
-    convo = {id:'c'+Date.now(), listingId:listing.id, partner:listing.seller.name, sub:'Zu: '+listing.title, unread:false, time:'jetzt', messages:[], isReal:false};
-    conversations.unshift(convo);
-  }
-  const reserveMsg = {from:'me', type:'reserve', listing, shop, status:'pending', time:'jetzt'};
-  convo.messages.push(reserveMsg);
-  convo.time = 'jetzt';
-  renderChatlist();
-  openChat(convo.id);
-  showToastMsg('Anfrage an ' + shop.shopName + ' gesendet');
-
-  // Simuliert die Antwort des Händlers, da es im Demo-Modus keinen echten zweiten Nutzer gibt.
-  setTimeout(()=>{
-    reserveMsg.status = 'accepted';
-    convo.messages.push({from:'them', type:'text', text:'Passt, ich leg\'s für dich zurück. Bis bald im Laden!', time:'jetzt'});
-    convo.time = 'jetzt';
-    if(String(currentChatId)===String(convo.id)){ renderMessages(convo); } else { convo.unread = true; }
-    renderChatlist();
-  }, 2200);
-}
 
 /* ---------------- Echte Anzeigen aus Supabase laden ---------------- */
 function hashCode(str){
@@ -2922,6 +2882,7 @@ async function loadListingsFromSupabase(){
         category: row.category,
         mode: row.mode,
         status: row.status,
+        stock: row.stock,
         mine: myId ? row.owner_id === myId : false,
         ownerId: row.owner_id,
         photos: photosByListing[row.id] || [],
@@ -3372,6 +3333,149 @@ viewer.addEventListener('keydown',e=>{if(e.key==='ArrowLeft'||e.key==='ArrowRigh
 let touchStart=null;
 viewer.addEventListener('touchstart',e=>{touchStart=e.touches.length===1?{x:e.touches[0].clientX,y:e.touches[0].clientY}:null;},{passive:true});
 viewer.addEventListener('touchend',e=>{if(!touchStart)return;const dx=e.changedTouches[0].clientX-touchStart.x,dy=e.changedTouches[0].clientY-touchStart.y;if(Math.abs(dx)>50&&Math.abs(dx)>Math.abs(dy)*1.5)stepPhoto(dx<0?1:-1);touchStart=null;},{passive:true});
+
+/* Dealer tools: inventory, reservations, follows, events and verification. */
+let dealerPanel='inventory', activeDealerShop=null;
+const reservationLabels={pending:'Wartet auf Händlerbestätigung',accepted:'Vom Händler bestätigt',rejected:'Abgelehnt',cancelled:'Storniert',collected:'Abgeholt'};
+function localDate(value){return new Date(value).toLocaleString('de-AT',{dateStyle:'medium',timeStyle:'short'});}
+function localInput(value){const date=new Date(value);return new Date(date-date.getTimezoneOffset()*60000).toISOString().slice(0,16);}
+async function signedIn(){const user=await requireAuth();if(user)currentUser=user;return user;}
+async function taskButton(button,task){if(button.disabled)return;button.disabled=true;try{await task();}catch(e){showToastMsg(e.message||'Aktion fehlgeschlagen.');}finally{button.disabled=false;}}
+function requireResult(result){if(result.error)throw result.error;return result.data;}
+function dealerBadge(shop){return shop.is_verified?'<span class="verified-badge">✓ Geprüfter Händler</span>':'<span class="shop-badge">Händler</span>';}
+async function refreshNoticeCount(){
+ const badge=document.getElementById('noticeCount');if(!currentUser||!supabaseClient){badge.textContent='';return;}
+ const {count,error}=await supabaseClient.from('dealer_notifications').select('id',{count:'exact',head:true}).is('read_at',null);
+ if(!error)badge.textContent=count?' · '+count+' neu':'';
+}
+async function openNotifications(){
+ if(!await signedIn())return;showView('notifications');const root=document.getElementById('notificationList');root.textContent='Wird geladen …';
+ try{
+ const rows=requireResult(await supabaseClient.from('dealer_notifications').select('*').order('created_at',{ascending:false}).limit(100))||[];
+ root.innerHTML='<p class="field-hint">Benachrichtigungen in der App · die letzten 100 Einträge</p>'+(rows.length?'':'<div class="empty-state">Noch keine Benachrichtigungen.</div>');
+ for(const n of rows){const button=document.createElement('button');button.className='dealer-row';button.innerHTML='<span><strong>'+(!n.read_at?'● ':'')+escapeHTML(n.title)+'</strong><small>'+escapeHTML(localDate(n.created_at))+'</small></span><span>→</span>';button.onclick=()=>taskButton(button,async()=>{
+ requireResult(await supabaseClient.from('dealer_notifications').update({read_at:new Date().toISOString()}).eq('id',n.id));refreshNoticeCount();
+ if(n.kind==='reservation'){await openReservations();}else if(n.kind==='verification'){await openDealerTools('verification');}else if(n.kind==='listing'&&n.listing_id){await loadListingsFromSupabase();if(listings.some(l=>l.id===n.listing_id))openDetail(n.listing_id);else showToastMsg('Das Inserat ist nicht mehr verfügbar.');}else if(n.dealer_id)await openShopProfile(n.dealer_id,'notifications');
+ });root.appendChild(button);}
+ }catch(e){root.textContent='Benachrichtigungen konnten nicht geladen werden: '+e.message;}
+}
+async function addShopExtras(ownerId,shop){
+ const root=document.getElementById('shopExtras');if(!root)return;
+ const tools=document.createElement('div');tools.className='tool-actions';root.appendChild(tools);
+ if(currentUser?.id!==ownerId){
+ const follow=document.createElement('button');follow.className='btn btn-secondary';follow.textContent='Händler folgen';tools.appendChild(follow);
+ let following=false;
+ const reload=async()=>{if(currentUser){const row=requireResult(await supabaseClient.from('dealer_follows').select('dealer_id').eq('dealer_id',ownerId).maybeSingle());following=!!row;}follow.textContent=following?'✓ Gefolgt · Entfolgen':'Händler folgen';};
+ try{await reload();}catch(e){showToastMsg(e.message);}
+ follow.onclick=()=>taskButton(follow,async()=>{if(!await signedIn())return;await reload();requireResult(following?await supabaseClient.from('dealer_follows').delete().eq('dealer_id',ownerId).eq('user_id',currentUser.id):await supabaseClient.from('dealer_follows').insert({user_id:currentUser.id,dealer_id:ownerId}));await reload();showToastMsg(following?'Neue Angebote und Veranstaltungen erscheinen in deinen Benachrichtigungen.':'Händler entfolgt.');});
+ }else{const button=document.createElement('button');button.className='btn btn-secondary';button.textContent='Händlerbereich öffnen';button.onclick=()=>openDealerTools();tools.appendChild(button);}
+ const events=document.createElement('div');root.appendChild(events);
+ try{const rows=requireResult(await supabaseClient.from('dealer_events').select('*').eq('dealer_id',ownerId).gte('starts_at',new Date().toISOString()).order('starts_at'))||[];
+ events.innerHTML='<h3>Turniere & Tauschtage</h3>'+(rows.length?rows.map(event=>`<article class="tool-row"><strong>${escapeHTML(event.title)}</strong><p>${escapeHTML(localDate(event.starts_at))} · ${escapeHTML(event.location)}</p><p>${escapeHTML(event.description)}</p></article>`).join(''):'<p class="field-hint">Aktuell keine kommenden Veranstaltungen.</p>');
+ }catch(e){events.textContent='Veranstaltungen konnten nicht geladen werden.';}
+}
+async function openDealerTools(panel='inventory'){
+ if(!await signedIn())return;dealerPanel=panel;showView('dealer-tools');const root=document.getElementById('dealerToolBody');root.textContent='Händlerbereich wird geladen …';
+ try{activeDealerShop=requireResult(await supabaseClient.from('shops').select('*').eq('owner_id',currentUser.id).maybeSingle());
+ if(!activeDealerShop){root.textContent='Dieser Bereich ist für registrierte Händlerkonten verfügbar.';return;}
+ document.querySelectorAll('[data-dealer-panel]').forEach(b=>b.classList.toggle('active',b.dataset.dealerPanel===panel));
+ if(panel==='inventory')await renderInventory();else if(panel==='events')await renderEventManager();else if(panel==='verification')await renderVerificationForm();else await renderReservations(root,true);
+ }catch(e){root.textContent=e.message;}
+}
+async function renderInventory(){
+ const root=document.getElementById('dealerToolBody');
+ const rows=requireResult(await supabaseClient.from('listings').select('id,title,price,stock,status,mode').eq('owner_id',currentUser.id).order('created_at',{ascending:false}))||[];
+ const reservations=requireResult(await supabaseClient.from('dealer_reservations').select('listing_id,quantity').eq('dealer_id',currentUser.id).eq('status','accepted'))||[];
+ root.innerHTML='<div class="tool-actions"><button class="btn btn-primary" id="inventoryNew">Inserat erstellen</button><button class="btn btn-secondary" id="inventoryCSV">CSV importieren</button></div><p class="field-hint">Freier Bestand: noch verfügbare Stückzahl. Bestätigte Reservierungen sind bereits abgezogen. „Abgeschlossen“ blendet ein Inserat aus der Suche aus.</p><div class="table-scroll"><table class="inventory-table"><thead><tr><th>Inserat</th><th>Preis (€)</th><th>Frei</th><th>Reserviert</th><th>Status</th><th>Aktion</th></tr></thead><tbody id="inventoryRows"></tbody></table></div>';
+ document.getElementById('inventoryNew').onclick=()=>openCreateForm();document.getElementById('inventoryCSV').onclick=openCSVImport;
+ const body=document.getElementById('inventoryRows');
+ for(const item of rows){const tr=document.createElement('tr');const reserved=reservations.filter(r=>r.listing_id===item.id).reduce((sum,r)=>sum+r.quantity,0);
+ tr.innerHTML=`<td>${escapeHTML(item.title)}</td><td><input aria-label="Preis" type="number" min="0" step="0.01" value="${item.price??''}" ${item.mode==='tausch'?'disabled':''}></td><td><input aria-label="Freier Bestand" type="number" min="0" step="1" value="${item.stock}"></td><td>${reserved}</td><td><select aria-label="Status"><option value="aktiv">Aktiv</option><option value="done">Abgeschlossen</option></select></td><td><button class="mini-btn">Speichern</button></td>`;
+ tr.querySelector('select').value=item.status;
+ const save=tr.querySelector('button');save.onclick=()=>taskButton(save,async()=>{
+ const [priceInput,stockInput]=tr.querySelectorAll('input');const stock=Number(stockInput.value),price=Number(priceInput.value);
+ if(stockInput.value===''||!Number.isSafeInteger(stock)||stock<0||stock>2147483647||item.mode==='verkauf'&&(priceInput.value===''||!Number.isFinite(price)||price<0))throw new Error('Bitte einen gültigen Preis und ganzzahligen Bestand eingeben.');
+ const data=requireResult(await supabaseClient.from('listings').update({stock,price:item.mode==='verkauf'?price:null,status:tr.querySelector('select').value}).eq('id',item.id).eq('stock',item.stock).select('id'));
+ if(!data?.length)throw new Error('Der Bestand hat sich inzwischen geändert. Bitte den Händlerbereich neu öffnen.');item.stock=stock;showToastMsg('Bestand gespeichert');await loadListingsFromSupabase();
+ });body.appendChild(tr);}
+ if(!rows.length)body.innerHTML='<tr><td colspan="6">Noch keine Inserate. Erstelle eines oder importiere eine CSV-Datei.</td></tr>';
+}
+function parseDealerCSV(text){
+ text=text.replace(/^\uFEFF/,'');let delim=';',quoted=false;
+ const first=text.split(/\r?\n/)[0];if(!first.includes(';'))delim=',';
+ const rows=[];let row=[],cell='';
+ for(let i=0;i<text.length;i++){const c=text[i];if(c==='"'){if(quoted&&text[i+1]==='"'){cell+='"';i++;}else quoted=!quoted;}else if(c===delim&&!quoted){row.push(cell.trim());cell='';}else if((c==='\n'||c==='\r')&&!quoted){if(c==='\r'&&text[i+1]==='\n')i++;row.push(cell.trim());if(row.some(Boolean))rows.push(row);row=[];cell='';}else cell+=c;}
+ if(quoted)throw new Error('Nicht geschlossenes Anführungszeichen in der CSV-Datei.');row.push(cell.trim());if(row.some(Boolean))rows.push(row);
+ if(rows.length<2)throw new Error('Die CSV-Datei enthält keine Inserate.');if(rows.length>101)throw new Error('Maximal 100 Inserate pro Import.');
+ const headers=rows.shift().map(x=>x.toLowerCase());const required=['titel','spiel','kategorie','art','preis','bestand','ort','beschreibung','tauschwunsch'];
+ if(headers.length!==required.length||new Set(headers).size!==headers.length||required.some(h=>!headers.includes(h)))throw new Error('Bitte die Spalten der CSV-Vorlage verwenden.');
+ return rows.map((r,index)=>{
+ if(r.length!==headers.length)throw new Error(`Zeile ${index+2}: falsche Spaltenanzahl.`);
+ const obj=Object.fromEntries(headers.map((h,i)=>[h,r[i]]));const game=obj.spiel.toLowerCase(),mode=({'kaufen':'verkauf','verkaufen':'verkauf','verkauf':'verkauf','tauschen':'tausch','tausch':'tausch'})[obj.art.toLowerCase()],stock=Number(obj.bestand),price=Number(obj.preis.replace(',','.'));
+ if(!obj.titel||obj.titel.length>200||!obj.beschreibung||!obj.ort||!CATEGORY_SETS[game]?.some(c=>c[0]===obj.kategorie)||!mode||!obj.bestand||!Number.isInteger(stock)||stock<0||stock>2147483647||mode==='verkauf'&&(!obj.preis||!Number.isFinite(price)||price<0)||mode==='tausch'&&!obj.tauschwunsch)throw new Error(`Zeile ${index+2}: Titel, Spiel, Kategorie, Art, Preis, Bestand oder Pflichtangaben prüfen.`);
+ return {id:crypto.randomUUID(),title:obj.titel,game,category:obj.kategorie,mode,price:mode==='verkauf'?price:null,stock,city:obj.ort,has_text:obj.beschreibung,wants_text:mode==='tausch'?obj.tauschwunsch:null,status:'aktiv'};
+ });
+}
+function openCSVImport(){
+ let preview=[];openSheet('<button class="sheet-close" onclick="closeSheet()">✕</button><h2>Bestand importieren</h2><p class="field-hint">Bis zu 100 Inserate, maximal 1 MB. UTF-8, Semikolon oder Komma. Fotos kannst du danach über „Bearbeiten“ ergänzen. Die Vorlage enthält die gültigen Spalten.</p><button class="btn btn-secondary" id="csvTemplate">Vorlage herunterladen</button><p><input type="file" id="csvFile" accept=".csv,text/csv" aria-label="CSV-Datei"></p><div id="csvPreview" role="status"></div><button class="btn btn-primary" id="csvSubmit" disabled>Importieren</button>');
+ document.getElementById('csvTemplate').onclick=()=>{const csv='Titel;Spiel;Kategorie;Art;Preis;Bestand;Ort;Beschreibung;Tauschwunsch\r\nBeispielkarte;pokemon;einzel;verkauf;5,50;3;Wien;Sehr guter Zustand;\r\n';const url=URL.createObjectURL(new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8'}));const a=document.createElement('a');a.href=url;a.download='traderei-import-vorlage.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
+ const button=document.getElementById('csvSubmit'),file=document.getElementById('csvFile'),out=document.getElementById('csvPreview');
+ file.onchange=async()=>{preview=[];button.disabled=true;try{const f=file.files[0];if(!f)return;if(f.size>1024*1024)throw new Error('Maximal 1 MB.');preview=parseDealerCSV(await f.text());out.innerHTML='<p>'+preview.length+' Inserate bereit:</p><ul>'+preview.slice(0,5).map(r=>'<li>'+escapeHTML(r.title)+' · '+r.stock+' Stück</li>').join('')+'</ul><p class="field-hint">Der Import veröffentlicht diese Inserate und benachrichtigt deine Follower.</p>';button.disabled=false;}catch(e){out.textContent=e.message;}};
+ button.onclick=()=>taskButton(button,async()=>{file.disabled=true;try{const rows=preview.map(r=>({...r,owner_id:currentUser.id}));const {error}=await supabaseClient.from('listings').insert(rows);if(error){const {data}=await supabaseClient.from('listings').select('id').in('id',rows.map(r=>r.id));if(data?.length!==rows.length)throw error;}closeSheet();showToastMsg(rows.length+' Inserate importiert');await loadListingsFromSupabase();await openDealerTools();}finally{file.disabled=false;}});
+}
+async function openReservations(){if(!await signedIn())return;showView('reservations');await renderReservations(document.getElementById('reservationList'),false);}
+async function renderReservations(root,dealerOnly){
+ root.textContent='Reservierungen werden geladen …';
+ try{let query=supabaseClient.from('dealer_reservations').select('*, listings(title)').order('created_at',{ascending:false});if(dealerOnly)query=query.eq('dealer_id',currentUser.id);
+ const rows=requireResult(await query)||[];root.replaceChildren();if(!rows.length){root.innerHTML='<div class="empty-state">Noch keine Reservierungsanfragen.</div>';return;}
+ const names={};const ids=[...new Set(rows.flatMap(r=>[r.buyer_id,r.dealer_id]))];const people=requireResult(await supabaseClient.from('profiles').select('id,display_name').in('id',ids))||[];people.forEach(p=>names[p.id]=p.display_name);
+ for(const r of rows){const seller=r.dealer_id===currentUser.id;const article=document.createElement('article');article.className='tool-row';article.innerHTML=`<strong>${escapeHTML(r.listings?.title||'Inserat')}</strong><p>${escapeHTML(reservationLabels[r.status])}</p><p>${r.quantity} Stück · Abholung: ${escapeHTML(localDate(r.pickup_at))}</p><p>${seller?'Kunde':'Händler'}: ${escapeHTML(names[seller?r.buyer_id:r.dealer_id]||'Profil')}</p>${r.note?'<p>'+escapeHTML(r.note)+'</p>':''}<div class="tool-actions"></div>`;
+ const actions=article.querySelector('.tool-actions');let choices=[];
+ if(seller&&r.status==='pending')choices=[['accepted','Abholtermin bestätigen'],['rejected','Ablehnen']];
+ if(seller&&r.status==='accepted')choices=[['collected','Als abgeholt markieren'],['cancelled','Stornieren']];
+ if(!seller&&['pending','accepted'].includes(r.status))choices=[['cancelled','Anfrage stornieren']];
+ choices.forEach(([status,label])=>{const button=document.createElement('button');button.className='btn btn-secondary';button.textContent=label;button.onclick=()=>{openSheet('<button class="sheet-close" onclick="closeSheet()">✕</button><h3>'+escapeHTML(label)+'?</h3><p>'+escapeHTML(r.listings?.title||'Inserat')+' · '+r.quantity+' Stück · '+escapeHTML(localDate(r.pickup_at))+'</p><button class="btn btn-primary" id="reservationDecision">Bestätigen</button>');const decision=document.getElementById('reservationDecision');decision.onclick=()=>taskButton(decision,async()=>{const updated=requireResult(await supabaseClient.from('dealer_reservations').update({status}).eq('id',r.id).eq('status',r.status).select('id'));if(!updated?.length)throw new Error('Die Anfrage wurde inzwischen geändert. Bitte neu laden.');closeSheet();showToastMsg('Reservierung aktualisiert');await renderReservations(root,dealerOnly);await loadListingsFromSupabase();refreshNoticeCount();});};actions.appendChild(button);});root.appendChild(article);}
+ }catch(e){root.textContent=e.message;}
+}
+async function openReserveSheet(listing){
+ if(!await signedIn())return;if((listing.stock??1)<1){showToastMsg('Aktuell kein freier Bestand.');return;}
+ openSheet(`<button class="sheet-close" onclick="closeSheet()">✕</button><h2>Reservierung anfragen</h2><p>${escapeHTML(listing.title)}</p><p class="field-hint">Erst nach der Zusage des Händlers ist die Reservierung bestätigt. Der Händler bestätigt dabei auch deinen Abholtermin.</p><label for="reserveQty">Stückzahl</label><input class="text-input" id="reserveQty" type="number" min="1" max="${listing.stock??1}" value="1"><label for="reservePickup">Gewünschter Abholtermin (deine Ortszeit)</label><input class="text-input" id="reservePickup" type="datetime-local" min="${localInput(Date.now()+60000)}"><label for="reserveNote">Nachricht an den Händler</label><textarea class="text-area" id="reserveNote" maxlength="1000"></textarea><button class="btn btn-primary" id="sendReservation">Anfrage senden</button>`);
+ const button=document.getElementById('sendReservation');button.onclick=()=>taskButton(button,async()=>{const quantity=Number(document.getElementById('reserveQty').value),pickup=new Date(document.getElementById('reservePickup').value);if(!Number.isInteger(quantity)||quantity<1||quantity>10000||!Number.isFinite(pickup.getTime())||pickup<=new Date())throw new Error('Bitte Stückzahl und einen zukünftigen Abholtermin angeben.');const result=await supabaseClient.from('dealer_reservations').insert({listing_id:listing.id,buyer_id:currentUser.id,dealer_id:listing.ownerId||listing.seller.id,quantity,pickup_at:pickup.toISOString(),note:document.getElementById('reserveNote').value.trim()});if(result.error){if(result.error.code==='23505')throw new Error('Für dieses Inserat besteht bereits eine offene Anfrage. Siehe „Reservierungen“.');throw result.error;}closeSheet();showToastMsg('Anfrage gesendet – Händlerbestätigung ausstehend');await openReservations();});
+}
+async function renderEventManager(){
+ const root=document.getElementById('dealerToolBody');const rows=requireResult(await supabaseClient.from('dealer_events').select('*').eq('dealer_id',currentUser.id).order('starts_at'))||[];
+ root.innerHTML='<button class="btn btn-primary" id="newDealerEvent">Veranstaltung erstellen</button><div id="dealerEventRows"></div>';document.getElementById('newDealerEvent').onclick=()=>eventEditor();
+ for(const event of rows){const article=document.createElement('article');article.className='tool-row';article.innerHTML='<strong>'+escapeHTML(event.title)+'</strong><p>'+escapeHTML(localDate(event.starts_at))+' · '+escapeHTML(event.location)+'</p><div class="tool-actions"><button class="btn btn-secondary">Bearbeiten</button><button class="btn btn-secondary">Löschen</button></div>';const buttons=article.querySelectorAll('button');buttons[0].onclick=()=>eventEditor(event);buttons[1].onclick=()=>{openSheet('<h3>Veranstaltung löschen?</h3><p>'+escapeHTML(event.title)+'</p><button class="btn btn-secondary" onclick="closeSheet()">Abbrechen</button><button class="btn btn-primary" id="removeDealerEvent">Löschen</button>');const b=document.getElementById('removeDealerEvent');b.onclick=()=>taskButton(b,async()=>{requireResult(await supabaseClient.from('dealer_events').delete().eq('id',event.id));closeSheet();await renderEventManager();});};document.getElementById('dealerEventRows').appendChild(article);}
+}
+function eventEditor(event={}){
+ openSheet(`<button class="sheet-close" onclick="closeSheet()">✕</button><h2>${event.id?'Veranstaltung bearbeiten':'Veranstaltung erstellen'}</h2><label>Titel<input class="text-input" id="eventTitle" maxlength="150" value="${escapeHTML(event.title||'')}"></label><label>Art<select class="text-input" id="eventKind"><option value="turnier">Turnier</option><option value="tauschtag">Tauschtag</option><option value="sonstiges">Sonstiges</option></select></label><label>Beginn (deine Ortszeit)<input class="text-input" id="eventDate" type="datetime-local" value="${event.starts_at?localInput(event.starts_at):''}"></label><label>Veranstaltungsort<input class="text-input" id="eventLocation" maxlength="500" value="${escapeHTML(event.location||activeDealerShop.address||'')}"></label><label>Beschreibung<textarea class="text-area" id="eventDescription" maxlength="4000">${escapeHTML(event.description||'')}</textarea></label><button class="btn btn-primary" id="saveDealerEvent">Speichern</button>`);
+ document.getElementById('eventKind').value=event.kind||'turnier';const button=document.getElementById('saveDealerEvent');button.onclick=()=>taskButton(button,async()=>{const starts=new Date(document.getElementById('eventDate').value);const values={title:document.getElementById('eventTitle').value.trim(),kind:document.getElementById('eventKind').value,location:document.getElementById('eventLocation').value.trim(),description:document.getElementById('eventDescription').value.trim()};if(!values.title||!values.location||!Number.isFinite(starts.getTime())||starts<=new Date())throw new Error('Titel, Ort und zukünftigen Termin angeben.');values.starts_at=starts.toISOString();requireResult(event.id?await supabaseClient.from('dealer_events').update(values).eq('id',event.id):await supabaseClient.from('dealer_events').insert({...values,dealer_id:currentUser.id}));closeSheet();await renderEventManager();});
+}
+async function renderVerificationForm(){
+ const root=document.getElementById('dealerToolBody');const request=requireResult(await supabaseClient.from('dealer_verifications').select('*').eq('dealer_id',currentUser.id).maybeSingle());
+ root.innerHTML='<h3>Geprüftes Händlerprofil</h3><p>Ein Admin prüft deine Geschäftsangaben manuell. Erst nach Freigabe erscheint das Abzeichen.</p>';
+ if(request){root.innerHTML+='<p>Status: '+escapeHTML({pending:'Prüfung ausstehend',approved:'Geprüft',rejected:'Abgelehnt',revoked:'Abzeichen entzogen'}[request.status])+'</p><p>'+escapeHTML(request.review_note)+'</p>';return;}
+ root.innerHTML+='<label>Vollständiger Geschäftsname<input class="text-input" id="verifyName" maxlength="200"></label><label>Gewerbe- oder Firmenbuchnummer<input class="text-input" id="verifyNumber" maxlength="200"></label><label>Öffentlicher Nachweis / Impressum (https://)<input class="text-input" id="verifyURL" type="url"></label><p class="field-hint">Die Prüfungsangaben sehen nur du und die Admins. Bitte keine Ausweiskopien oder vertraulichen Dokumentlinks eintragen.</p><button class="btn btn-primary" id="requestVerification">Prüfung beantragen</button>';
+ document.getElementById('verifyName').value=activeDealerShop.shop_name;const button=document.getElementById('requestVerification');button.onclick=()=>taskButton(button,async()=>{const business_name=document.getElementById('verifyName').value.trim(),registration_number=document.getElementById('verifyNumber').value.trim(),evidence_url=document.getElementById('verifyURL').value.trim();let url;try{url=new URL(evidence_url);}catch{}if(!business_name||!registration_number||url?.protocol!=='https:')throw new Error('Geschäftsname, Registrierungsnummer und HTTPS-Nachweis erforderlich.');requireResult(await supabaseClient.from('dealer_verifications').insert({dealer_id:currentUser.id,business_name,registration_number,evidence_url}));await renderVerificationForm();});
+}
+async function openDealerReviews(){
+ if(!await signedIn()||!isAdmin())return;showView('dealer-reviews');const root=document.getElementById('dealerReviewList');root.textContent='Prüfanträge werden geladen …';
+ try{const rows=requireResult(await supabaseClient.from('dealer_verifications').select('*').order('created_at',{ascending:false}))||[];root.replaceChildren();if(!rows.length)root.textContent='Keine Prüfanträge vorhanden.';
+ for(const r of rows){const article=document.createElement('article');article.className='tool-row';article.innerHTML='<strong>'+escapeHTML(r.business_name)+'</strong><p>Nummer: '+escapeHTML(r.registration_number)+'</p><p>Status: '+escapeHTML(r.status)+'</p><p>'+escapeHTML(r.review_note)+'</p>';
+ const url=new URL(r.evidence_url);if(url.protocol==='https:'){const a=document.createElement('a');a.href=url.href;a.target='_blank';a.rel='noopener noreferrer';a.textContent='Nachweis öffnen und prüfen';article.appendChild(a);}
+ const note=document.createElement('textarea');note.className='text-area';note.placeholder='Prüfvermerk: Quelle und Ergebnis der tatsächlichen Prüfung';note.setAttribute('aria-label','Prüfvermerk');article.appendChild(note);
+ const checked=document.createElement('label');checked.innerHTML='<input type="checkbox"> Ich habe die Geschäftsangaben und den Nachweis tatsächlich geprüft.';article.appendChild(checked);
+ const actions=document.createElement('div');actions.className='tool-actions';article.appendChild(actions);
+ for(const [status,label] of [['approved','Freigeben'],['rejected','Ablehnen'],['revoked','Abzeichen entziehen']]){const button=document.createElement('button');button.className='btn btn-secondary';button.textContent=label;button.onclick=()=>taskButton(button,async()=>{if(note.value.trim().length<5||!checked.querySelector('input').checked)throw new Error('Prüfung durchführen, bestätigen und einen Prüfvermerk eintragen.');const data=requireResult(await supabaseClient.from('dealer_verifications').update({status,review_note:note.value.trim()}).eq('dealer_id',r.dealer_id).eq('status',r.status).select('dealer_id'));if(!data?.length)throw new Error('Antrag wurde geändert. Bitte neu laden.');await openDealerReviews();});actions.appendChild(button);}root.appendChild(article);}
+ }catch(e){root.textContent=e.message;}
+}
+document.getElementById('openDealerTools').onclick=()=>openDealerTools();
+document.getElementById('openMyReservations').onclick=openReservations;
+document.getElementById('openNotifications').onclick=openNotifications;
+document.getElementById('openDealerReviews').onclick=openDealerReviews;
+document.querySelectorAll('[data-dealer-panel]').forEach(b=>b.onclick=()=>openDealerTools(b.dataset.dealerPanel));
+setInterval(()=>{if(currentUser&&!document.hidden)refreshNoticeCount();},60000);
+window.addEventListener('focus',()=>refreshNoticeCount());
 
 /* ---------------- Init ---------------- */
 renderFeed();
