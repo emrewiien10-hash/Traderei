@@ -8,6 +8,8 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700;800&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
   :root{
     --paper:#0D0E15;
@@ -848,6 +850,11 @@
   @media(max-width:599px){.navbar{padding-left:3px;padding-right:3px;gap:0;}.navitem{min-width:0;font-size:10px;padding-left:3px;padding-right:3px;}.detail-photo-open>img{height:240px;}#photoViewer{padding:60px 8px;}#viewerPrev,#viewerNext{z-index:1;}}
 
  .tool-body{padding:20px 18px 100px;}.tool-actions{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0;}.tool-actions .btn{flex:1 1 140px;}.tool-row{padding:20px 0;border-bottom:1px solid var(--line);}.tool-row p{font-size:13px;color:var(--muted);line-height:1.6;overflow-wrap:anywhere;}.tool-row a{color:var(--forest);}.tool-body h3{font-family:'Sora',sans-serif;font-size:18px;}.tool-body label,.sheet label{display:block;margin-top:14px;font-size:13px;}.tool-body label input,.sheet label input{margin-top:6px;}.menu-button{width:100%;background:none;border:0;color:var(--ink);font:inherit;text-align:left;}.menu-button[hidden]{display:none;}.table-scroll{overflow-x:auto;}.inventory-table{border-collapse:collapse;width:100%;font-size:13px;}.inventory-table td,.inventory-table th{padding:12px 8px;border-bottom:1px solid var(--line);text-align:left;}.inventory-table input{width:85px;}.inventory-table input,.inventory-table select{background:var(--card-bg);color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:8px;}#noticeCount{color:var(--forest);}#shopExtras{padding-bottom:12px;}
+
+  #locPill{background:none;border:0;font:inherit;cursor:pointer;text-align:right;}
+  #radiusPanel{max-height:70dvh;overflow:auto;z-index:1100;}
+  #mapStatus{z-index:500;top:75px;} .map-card{z-index:600;} #googleMap{z-index:0;}
+  #locationResults button{display:block;width:100%;margin-top:8px;text-align:left;}
 </style>
 </head>
 <body>
@@ -880,12 +887,20 @@
           </svg>
           traderei
         </div>
-        <div class="locpill" id="locPill">📍 <span id="locLabel">Graz, 5 km</span></div>
+        <button type="button" class="locpill" id="locPill" aria-expanded="false" aria-controls="radiusPanel">📍 <span id="locLabel">Ort wählen</span></button>
       </div>
       <div class="radius-panel" id="radiusPanel">
+        <label class="field-label" for="searchState">Bundesland</label>
+        <select class="text-input" id="searchState"><option value="">Bundesland auswählen</option></select>
+        <label class="field-label" for="searchDistrict" style="margin-top:12px;display:block">Bezirk</label>
+        <select class="text-input" id="searchDistrict" disabled><option value="">Zuerst Bundesland auswählen</option></select>
+        <div class="location-actions"><button class="btn btn-secondary" id="applyDistrictBtn" disabled>Standort übernehmen</button><button class="btn btn-primary" id="useMyLocationBtn">◎ Meinen Standort verwenden</button></div>
+        <p class="field-hint">Bei manueller Auswahl wird der Umkreis ab einem Kartenpunkt im gewählten Bezirk berechnet. Dein Gerätestandort wird nicht im Profil gespeichert. Für den Kartenpunkt wird die Bezirksauswahl an <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a>/Nominatim gesendet.</p>
+        <div id="searchLocationStatus" class="field-hint" role="status" aria-live="polite"></div><div id="locationResults"></div>
         <div class="radius-panel-label"><span>Umkreis</span><span id="radiusValue">5 km</span></div>
-        <input type="range" id="radiusSlider" min="1" max="30" value="5">
-        <div class="field-hint">Zeigt nur Anzeigen innerhalb dieser Entfernung von Graz.</div>
+        <input type="range" id="radiusSlider" aria-label="Suchumkreis in Kilometern" min="1" max="100" value="5">
+        <div class="field-hint"><span id="radiusHint">Wähle einen Ort, um den Umkreisfilter zu aktivieren.</span></div>
+      <button class="mini-btn" id="clearSearchLocationBtn">Alle Orte anzeigen</button>
       </div>
       <div class="discover-intro">
         <p class="discover-kicker">Deine Community für Sammelstücke</p>
@@ -903,6 +918,7 @@
         </button>
         <div class="sort-menu" id="sortMenu">
           <div class="sort-opt active" data-sort="relevanz">Relevanz</div>
+          <div class="sort-opt" data-sort="entfernung">Nächste zuerst</div>
           <div class="sort-opt" data-sort="neu">Neueste zuerst</div>
           <div class="sort-opt" data-sort="alt">Älteste zuerst</div>
         </div>
@@ -1179,14 +1195,19 @@
       </div>
       <div class="field">
         <div class="field-label">Standort</div>
-        <input class="text-input" id="formOrt" value="Graz">
+        <input type="hidden" id="formOrt" value="">
+        <label class="field-label" for="listingState">Bundesland</label>
+        <select class="text-input" id="listingState"><option value="">Bundesland auswählen</option></select>
+        <label class="field-label" for="listingDistrict" style="display:block;margin-top:12px">Bezirk</label>
+        <select class="text-input" id="listingDistrict" disabled><option value="">Zuerst Bundesland auswählen</option></select>
+        <p class="field-hint" id="listingRegionLabel"></p>
         <div class="field-hint">Der genaue Treffpunkt wird erst beim Kontakt vereinbart.</div>
         <div class="location-actions">
           <button type="button" class="btn btn-secondary" id="locateListingBtn">◎ Standort verwenden</button>
-          <button type="button" class="btn btn-secondary" id="findListingCityBtn">Ort auf Karte finden</button>
+          <button type="button" class="btn btn-secondary" id="findListingCityBtn">Bezirk auf Karte übernehmen</button>
           <button type="button" class="mini-btn" id="clearListingLocationBtn">Standort entfernen</button>
         </div>
-        <div class="field-hint">Optional: Für die Kartenansicht speichern wir auf etwa 1 km gerundete Koordinaten. Ohne Standort bleibt dein Inserat in der Liste sichtbar. Bei der Ortssuche wird der eingegebene Ort an Google gesendet.</div>
+        <div class="field-hint">Optional: Für die Kartenansicht speichern wir auf etwa 1 km gerundete Koordinaten. Ohne Standort bleibt dein Inserat in der Liste sichtbar. Beim Übernehmen des Bezirks wird dessen Name an OpenStreetMap/Nominatim gesendet. Der Kartenpunkt steht für den Bezirk, nicht für deinen genauen Standort.</div>
         <div id="listingLocationStatus" class="field-hint" role="status">Noch kein Kartenstandort gewählt.</div>
       </div>
 
@@ -1212,11 +1233,11 @@
     <div class="topbar" style="padding-bottom:16px;">
       <div class="brand-row" style="margin-bottom:0;">
         <div class="subheader-title">Karte</div>
-        <div class="locpill">Ungefähre Inserat-Standorte</div>
+        <button class="mini-btn" id="centerMapBtn">◎ Mein Standort</button>
       </div>
     </div>
     <div class="map-wrap" id="mapWrap">
-      <div id="googleMap" aria-label="Inserate auf Google Maps"></div>
+      <div id="googleMap" aria-label="Karte mit Inseraten"></div>
       <div id="mapStatus" role="status"></div>
       <div class="map-card" id="mapCard"></div>
     </div>
@@ -1348,6 +1369,149 @@ let activeMode='alle', activeGame='alle', activeCategory='alle', activeSort='rel
 let favorites = new Set();
 let plusUnlocked = false;
 let radiusKm = 5;
+let searchLocation = null;
+let searchLocationRequest = 0;
+let searchLocationLabel = "";
+let geoSearchBusy = false;
+let lastGeoSearchAt = 0;
+const geoSearchCache = new Map();
+// Bezirkszuordnung: Statistik Austria / Liste der politischen Bezirke; Wien: Stadt Wien.
+const AUSTRIAN_DISTRICTS = {
+  "Burgenland": [
+    "Eisenstadt (Stadt)",
+    "Rust (Stadt)",
+    "Eisenstadt-Umgebung",
+    "Güssing",
+    "Jennersdorf",
+    "Mattersburg",
+    "Neusiedl am See",
+    "Oberpullendorf",
+    "Oberwart"
+  ],
+  "Kärnten": [
+    "Klagenfurt am Wörthersee (Stadt)",
+    "Villach (Stadt)",
+    "Feldkirchen",
+    "Hermagor",
+    "Klagenfurt-Land",
+    "St. Veit an der Glan",
+    "Spittal an der Drau",
+    "Villach-Land",
+    "Völkermarkt",
+    "Wolfsberg"
+  ],
+  "Niederösterreich": [
+    "Krems an der Donau (Stadt)",
+    "St. Pölten (Stadt)",
+    "Waidhofen an der Ybbs (Stadt)",
+    "Wiener Neustadt (Stadt)",
+    "Amstetten",
+    "Baden",
+    "Bruck an der Leitha",
+    "Gänserndorf",
+    "Gmünd",
+    "Hollabrunn",
+    "Horn",
+    "Korneuburg",
+    "Krems (Land)",
+    "Lilienfeld",
+    "Melk",
+    "Mistelbach",
+    "Mödling",
+    "Neunkirchen",
+    "St. Pölten (Land)",
+    "Scheibbs",
+    "Tulln",
+    "Waidhofen an der Thaya",
+    "Wiener Neustadt (Land)",
+    "Zwettl"
+  ],
+  "Oberösterreich": [
+    "Linz (Stadt)",
+    "Steyr (Stadt)",
+    "Wels (Stadt)",
+    "Braunau",
+    "Eferding",
+    "Freistadt",
+    "Gmunden",
+    "Grieskirchen",
+    "Kirchdorf",
+    "Linz-Land",
+    "Perg",
+    "Ried",
+    "Rohrbach",
+    "Schärding",
+    "Steyr-Land",
+    "Urfahr-Umgebung",
+    "Vöcklabruck",
+    "Wels-Land"
+  ],
+  "Salzburg": [
+    "Salzburg (Stadt)",
+    "Hallein",
+    "Salzburg-Umgebung",
+    "St. Johann im Pongau",
+    "Tamsweg",
+    "Zell am See"
+  ],
+  "Steiermark": [
+    "Graz (Stadt)",
+    "Bruck-Mürzzuschlag",
+    "Deutschlandsberg",
+    "Graz-Umgebung",
+    "Hartberg-Fürstenfeld",
+    "Leibnitz",
+    "Leoben",
+    "Liezen",
+    "Murau",
+    "Murtal",
+    "Südoststeiermark",
+    "Voitsberg",
+    "Weiz"
+  ],
+  "Tirol": [
+    "Innsbruck (Stadt)",
+    "Imst",
+    "Innsbruck-Land",
+    "Kitzbühel",
+    "Kufstein",
+    "Landeck",
+    "Lienz",
+    "Reutte",
+    "Schwaz"
+  ],
+  "Vorarlberg": [
+    "Bludenz",
+    "Bregenz",
+    "Dornbirn",
+    "Feldkirch"
+  ],
+  "Wien": [
+    "1. Innere Stadt",
+    "2. Leopoldstadt",
+    "3. Landstraße",
+    "4. Wieden",
+    "5. Margareten",
+    "6. Mariahilf",
+    "7. Neubau",
+    "8. Josefstadt",
+    "9. Alsergrund",
+    "10. Favoriten",
+    "11. Simmering",
+    "12. Meidling",
+    "13. Hietzing",
+    "14. Penzing",
+    "15. Rudolfsheim-Fünfhaus",
+    "16. Ottakring",
+    "17. Hernals",
+    "18. Währing",
+    "19. Döbling",
+    "20. Brigittenau",
+    "21. Floridsdorf",
+    "22. Donaustadt",
+    "23. Liesing"
+  ]
+};
 const ME = {name:'Max J.', rating:'4.9★ · 14 Trades', verified:true};
 
 /* ---------------- Navigation ---------------- */
@@ -1373,8 +1537,23 @@ function thumbHTML(l, extraClass=''){
   return `<div class="thumb ${extraClass}" style="background:${l.thumbGrad}">${l.thumbLabel}</div>`;
 }
 function getDistanceKm(l){
-  const m = l.ort.match(/([\d,.]+)\s*km/);
-  return m ? parseFloat(m[1].replace(',', '.')) : 0;
+  if(!searchLocation || !validLocation(l)) return null;
+  const rad=n=>n*Math.PI/180;
+  const dLat=rad(l.latitude-searchLocation.lat),dLng=rad(l.longitude-searchLocation.lng);
+  const h=Math.sin(dLat/2)**2+Math.cos(rad(searchLocation.lat))*Math.cos(rad(l.latitude))*Math.sin(dLng/2)**2;
+  return 6371*2*Math.atan2(Math.sqrt(Math.min(1,h)),Math.sqrt(Math.max(0,1-h)));
+}
+function distanceLabel(l){
+  const km=getDistanceKm(l);
+  return km===null ? (searchLocation?' · Entfernung unbekannt':'') : ' · ca. '+km.toLocaleString('de-AT',{maximumFractionDigits:1})+' km Luftlinie';
+}
+function matchesDiscovery(l){
+  const q=document.getElementById('searchInput').value.trim().toLowerCase();
+  const km=getDistanceKm(l);
+  return l.status==='aktiv' && (activeMode==='alle'||l.mode===activeMode) &&
+    (activeGame==='alle'||l.game===activeGame) &&
+    (activeGame==='alle'||activeCategory==='alle'||l.category===activeCategory) &&
+    (!searchLocation||(km!==null&&km<=radiusKm)) && (!q||l.title.toLowerCase().includes(q));
 }
 function categoryLabel(game, cat){
   const set = CATEGORY_SETS[game];
@@ -1449,7 +1628,7 @@ function listingCardHTML(l, opts={}){
         <div class="trade-row"><span class="trade-label has">Hat:</span><span>${l.has}</span></div>
         ${l.wants ? `<div class="trade-row"><span class="trade-label wants">Sucht:</span><span>${l.wants}</span></div>` : ''}
         <div class="listing-foot">
-          <div class="meta">📍 ${l.ort} · ${l.zeit}</div>
+          <div class="meta">📍 ${l.ort}${distanceLabel(l)} · ${l.zeit}</div>
           ${l.preis ? `<div class="price">${l.preis}</div>` : ''}
         </div>
         ${showStatus && l.status==='aktiv' ? `
@@ -1472,18 +1651,11 @@ function listingCardHTML(l, opts={}){
 /* ---------------- Feed ---------------- */
 function renderFeed(){
   const feed = document.getElementById('feed');
-  const q = document.getElementById('searchInput').value.trim().toLowerCase();
-  let filtered = listings.filter(l=>{
-    if(l.status!=='aktiv') return false;
-    if(activeMode!=='alle' && l.mode!==activeMode) return false;
-    if(activeGame!=='alle' && l.game!==activeGame) return false;
-    if(activeGame!=='alle' && activeCategory!=='alle' && l.category!==activeCategory) return false;
-    if(getDistanceKm(l) > radiusKm) return false;
-    if(q && !l.title.toLowerCase().includes(q)) return false;
-    return true;
-  });
+  let filtered = listings.filter(matchesDiscovery);
   if(activeSort==='neu'){
     filtered = filtered.slice().sort((a,b)=>a.postedHoursAgo-b.postedHoursAgo);
+  } else if(activeSort==='entfernung'){
+    filtered = filtered.slice().sort((a,b)=>(getDistanceKm(a)??Infinity)-(getDistanceKm(b)??Infinity));
   } else if(activeSort==='alt'){
     filtered = filtered.slice().sort((a,b)=>b.postedHoursAgo-a.postedHoursAgo);
   } else {
@@ -1492,7 +1664,9 @@ function renderFeed(){
   feed.innerHTML = filtered.length
     ? filtered.map(l=>listingCardHTML(l)).join('')
     : `<div class="empty-state">Keine Treffer. Anderen Filter, Umkreis oder Suchbegriff probieren.</div>`;
+  if(searchLocation){const missing=listings.filter(l=>l.status==='aktiv'&&!validLocation(l)).length;if(missing)feed.insertAdjacentHTML('beforeend',`<p class="field-hint">${missing} Inserate ohne Koordinaten sind im Umkreisfilter ausgeblendet. Mit „Alle Orte anzeigen“ siehst du sie wieder.</p>`);}
   wireListingCards(feed);
+  renderMap();
 }
 document.querySelectorAll('.mode-btn').forEach(btn=>btn.addEventListener('click', ()=>{
   document.querySelectorAll('.mode-btn').forEach(b=>b.classList.remove('active'));
@@ -1531,15 +1705,17 @@ document.getElementById('searchInput').addEventListener('input', renderFeed);
 /* ---------------- Sortierung ---------------- */
 const sortBtn = document.getElementById('sortBtn');
 const sortMenu = document.getElementById('sortMenu');
-const sortLabels = {relevanz:'Relevanz', neu:'Neueste zuerst', alt:'Älteste zuerst'};
+const sortLabels = {entfernung:'Nächste zuerst', relevanz:'Relevanz', neu:'Neueste zuerst', alt:'Älteste zuerst'};
 sortBtn.addEventListener('click', (e)=>{
   e.stopPropagation();
   sortMenu.classList.toggle('open');
   sortBtn.classList.toggle('open');
 });
-sortMenu.querySelectorAll('.sort-opt').forEach(opt=>opt.addEventListener('click', ()=>{
+sortMenu.querySelectorAll('.sort-opt').forEach(opt=>opt.addEventListener('click', (e)=>{
+  e.stopPropagation();
   sortMenu.querySelectorAll('.sort-opt').forEach(o=>o.classList.remove('active'));
   opt.classList.add('active');
+  if(opt.dataset.sort==='entfernung'&&!searchLocation){radiusPanel.classList.add('open');locPill.setAttribute('aria-expanded','true');document.getElementById('searchLocationStatus').textContent='Bitte zuerst deinen Standort oder einen Ort auswählen.';return;}
   activeSort = opt.dataset.sort;
   document.getElementById('sortBtnLabel').textContent = sortLabels[activeSort];
   sortMenu.classList.remove('open');
@@ -1558,16 +1734,106 @@ const radiusSlider = document.getElementById('radiusSlider');
 locPill.addEventListener('click', (e)=>{
   e.stopPropagation();
   radiusPanel.classList.toggle('open');
+  locPill.setAttribute('aria-expanded',String(radiusPanel.classList.contains('open')));
 });
 radiusSlider.addEventListener('input', ()=>{
   radiusKm = parseInt(radiusSlider.value);
   document.getElementById('radiusValue').textContent = radiusKm + ' km';
-  document.getElementById('locLabel').textContent = 'Graz, ' + radiusKm + ' km';
+  updateSearchLocationUI();
   renderFeed();
 });
 document.addEventListener('click', (e)=>{
-  if(!radiusPanel.contains(e.target)) radiusPanel.classList.remove('open');
+  if(!radiusPanel.contains(e.target)){radiusPanel.classList.remove('open');locPill.setAttribute('aria-expanded','false');}
 });
+
+function updateSearchLocationUI(){
+  document.getElementById('locLabel').textContent=searchLocation?searchLocationLabel+', '+radiusKm+' km':'Ort wählen';
+  document.getElementById('centerMapBtn').textContent=searchLocation?'◎ Suchort zentrieren':'◎ Mein Standort';
+  document.getElementById('radiusHint').textContent=searchLocation?'Umkreis ab '+searchLocationLabel+'. Entfernungen sind Luftlinien; Inserat-Standorte sind ungefähr.':'Wähle einen Ort, um den Umkreisfilter zu aktivieren.';
+  radiusSlider.disabled=!searchLocation;
+}
+function setSearchLocation(position,label){
+  searchLocationRequest++;
+  searchLocation=position;searchLocationLabel=label;
+  document.getElementById('locationResults').replaceChildren();
+  document.getElementById('useMyLocationBtn').disabled=false;
+  activeSort=position?'entfernung':'relevanz';
+  document.getElementById('sortBtnLabel').textContent=sortLabels[activeSort];
+  sortMenu.querySelectorAll('.sort-opt').forEach(o=>o.classList.toggle('active',o.dataset.sort===activeSort));
+  updateSearchLocationUI();renderFeed();
+}
+function useMySearchLocation(){
+  const status=document.getElementById('searchLocationStatus');
+  radiusPanel.classList.add('open');locPill.setAttribute('aria-expanded','true');
+  if(!window.isSecureContext||!navigator.geolocation){status.textContent='Standortabfrage ist hier nicht verfügbar. Bitte Bundesland und Bezirk auswählen.';return;}
+  const request=++searchLocationRequest;
+  const button=document.getElementById('useMyLocationBtn');button.disabled=true;
+  status.textContent='Bitte die Standortfreigabe bestätigen …';
+  navigator.geolocation.getCurrentPosition(p=>{
+    if(request!==searchLocationRequest)return;
+    setSearchLocation({lat:p.coords.latitude,lng:p.coords.longitude},'Mein Standort');
+    document.getElementById('searchState').value='';resetDistrictOptions();
+    status.textContent='Standort übernommen. Genauigkeit laut Gerät: ca. '+Math.round(p.coords.accuracy)+' m.';
+  },error=>{
+    if(request!==searchLocationRequest)return;
+    button.disabled=false;
+    status.textContent=error.code===1?'Freigabe abgelehnt. Du kannst oben Bundesland und Bezirk auswählen.':error.code===3?'Die Standortabfrage dauert zu lange. Erneut versuchen oder Bundesland und Bezirk auswählen.':'Standort nicht verfügbar. Bitte Bundesland und Bezirk auswählen.';
+  },{enableHighAccuracy:true,timeout:15000,maximumAge:60000});
+}
+async function searchPlaces(query){
+  if(geoSearchCache.has(query))return geoSearchCache.get(query);
+  if(geoSearchBusy||Date.now()-lastGeoSearchAt<1100)throw new Error('Bitte kurz warten und erneut suchen.');
+  geoSearchBusy=true;lastGeoSearchAt=Date.now();
+  const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),12000);
+  try{
+    const response=await fetch('https://nominatim.openstreetmap.org/search?'+new URLSearchParams({q:query,format:'jsonv2',limit:'5',countrycodes:'at','accept-language':'de'}),{signal:controller.signal});
+    if(!response.ok)throw new Error('Ortssuche derzeit nicht erreichbar. Bitte später erneut versuchen.');
+    const rows=await response.json();
+    const result=rows.filter(r=>validLocation({latitude:Number(r.lat),longitude:Number(r.lon)}));
+    geoSearchCache.set(query,result);return result;
+  }finally{clearTimeout(timer);geoSearchBusy=false;}
+}
+document.getElementById('useMyLocationBtn').onclick=useMySearchLocation;
+document.getElementById('centerMapBtn').onclick=(e)=>{e.stopPropagation();if(searchLocation){renderMap();}else{showView('feed');useMySearchLocation();}};
+document.getElementById('clearSearchLocationBtn').onclick=()=>{setSearchLocation(null,'');document.getElementById('searchState').value='';resetDistrictOptions();document.getElementById('searchLocationStatus').textContent='Alle Orte werden angezeigt.';};
+function resetDistrictOptions(){
+  const state=document.getElementById('searchState').value;
+  const district=document.getElementById('searchDistrict');
+  district.replaceChildren(new Option(state?'Bezirk auswählen':'Zuerst Bundesland auswählen',''));
+  (AUSTRIAN_DISTRICTS[state]||[]).forEach(name=>district.appendChild(new Option(name,name)));
+  district.disabled=!state;document.getElementById('applyDistrictBtn').disabled=true;
+}
+function cancelPendingLocation(){
+  searchLocationRequest++;
+  document.getElementById('useMyLocationBtn').disabled=false;
+  document.getElementById('searchLocationStatus').textContent='';
+}
+function districtQuery(state,district){
+  const name=district.replace(/ \(Stadt\)| \(Land\)/g,'').replace(/^\d+\. /,'');
+  return (state==='Wien'||district.endsWith('(Stadt)')?'':'Bezirk ')+name+', '+state+', Österreich';
+}
+function initDistrictPicker(){
+  const state=document.getElementById('searchState');
+  Object.keys(AUSTRIAN_DISTRICTS).forEach(name=>state.appendChild(new Option(name,name)));
+  state.onchange=()=>{cancelPendingLocation();resetDistrictOptions();};
+  document.getElementById('searchDistrict').onchange=()=>{cancelPendingLocation();document.getElementById('applyDistrictBtn').disabled=!document.getElementById('searchDistrict').value;};
+}
+document.getElementById('applyDistrictBtn').onclick=async()=>{
+  const state=document.getElementById('searchState').value,district=document.getElementById('searchDistrict').value;
+  if(!AUSTRIAN_DISTRICTS[state]?.includes(district))return;
+  const status=document.getElementById('searchLocationStatus'),button=document.getElementById('applyDistrictBtn');
+  const request=++searchLocationRequest;button.disabled=true;
+  document.getElementById('useMyLocationBtn').disabled=false;
+  status.textContent='Kartenpunkt für '+district+' wird geladen …';
+  try{
+    const rows=await searchPlaces(districtQuery(state,district));if(request!==searchLocationRequest)return;
+    if(!rows.length)throw new Error('Für diesen Bezirk konnte kein Kartenpunkt geladen werden. Bitte erneut versuchen.');
+    const row=rows.find(r=>r.type==='administrative')||rows[0];
+    setSearchLocation({lat:Number(row.lat),lng:Number(row.lon)},district+', '+state);
+    status.textContent='Gewählt: '+district+', '+state+'. Der Umkreis startet am Kartenpunkt dieses Bezirks.';
+  }catch(e){if(request===searchLocationRequest)status.textContent=e.name==='AbortError'?'Das Laden dauert zu lange. Bitte erneut versuchen.':e.message;}
+  finally{button.disabled=!document.getElementById('searchDistrict').value;}
+};
 
 /* ---------------- Listing Detail ---------------- */
 function sellerBadgeHTML(seller){
@@ -1626,7 +1892,7 @@ function openDetail(id){
     <div class="detail-title">${l.title}</div><p class="field-hint">${l.stock??1} Stück frei verfügbar</p>
     <div class="detail-meta-row">
       <div class="tag-mode ${l.mode==='tausch'?'tausch':'verkauf'}">${l.mode==='tausch'?'Tausch':'Verkauf'}</div>
-      <div class="meta">📍 ${l.ort} · ${l.zeit}</div>
+      <div class="meta">📍 ${l.ort}${distanceLabel(l)} · ${l.zeit}</div>
     </div>
     <div class="detail-block">
       <div class="detail-block-label has">Hat</div>
@@ -2268,6 +2534,7 @@ function openCreateForm(){
   document.getElementById('formPrice').value = '';
   document.getElementById('formStock').value = '1';
   document.getElementById('formOrt').value = '';
+  syncListingRegion('');
   setListingLocation(null);
   ['errTitle','errHas','errWants','errPrice'].forEach(id=>document.getElementById(id).classList.remove('show'));
   document.querySelectorAll('#formMode .chip-opt').forEach(c=>c.classList.toggle('active', c.dataset.mode==='tausch'));
@@ -2295,6 +2562,7 @@ function openEditForm(listing){
   document.getElementById('formPrice').value = listing.preis ? parseFloat(listing.preis) : '';
   document.getElementById('formStock').value = listing.stock??1;
   document.getElementById('formOrt').value = (listing.ort || '').split(' · ')[0];
+  syncListingRegion(document.getElementById('formOrt').value);
   setListingLocation(validLocation(listing) ? {lat:listing.latitude,lng:listing.longitude} : null);
 
   ['errTitle','errHas','errWants','errPrice'].forEach(id=>document.getElementById(id).classList.remove('show'));
@@ -2725,7 +2993,7 @@ document.getElementById('formOrt').addEventListener('input',()=>setListingLocati
 document.getElementById('clearListingLocationBtn').addEventListener('click',()=>setListingLocation(null));
 document.getElementById('locateListingBtn').addEventListener('click',()=>{
   const status=document.getElementById('listingLocationStatus');
-  if(!window.isSecureContext || !navigator.geolocation){status.textContent='Standortabfrage benötigt HTTPS und einen unterstützten Browser. Alternativ den Ort suchen.';return;}
+  if(!window.isSecureContext || !navigator.geolocation){status.textContent='Standortabfrage benötigt HTTPS und einen unterstützten Browser. Alternativ den Bezirk auf Karte übernehmen.';return;}
   const request=++locationRequest;
   status.textContent='Bitte die Standortfreigabe im Browser bestätigen …';
   navigator.geolocation.getCurrentPosition(position=>{
@@ -2733,64 +3001,73 @@ document.getElementById('locateListingBtn').addEventListener('click',()=>{
     setListingLocation({lat:position.coords.latitude,lng:position.coords.longitude});
   },error=>{
     if(request!==locationRequest)return;
-    status.textContent=error.code===1?'Standortfreigabe abgelehnt. Alternativ den Ort suchen.':'Standort nicht verfügbar. Bitte erneut versuchen oder den Ort suchen.';
+    status.textContent=error.code===1?'Standortfreigabe abgelehnt. Alternativ den Bezirk auf Karte übernehmen.':'Standort nicht verfügbar. Bitte erneut versuchen oder den Bezirk auf Karte übernehmen.';
   },{enableHighAccuracy:false,timeout:15000,maximumAge:60000});
 });
 document.getElementById('findListingCityBtn').addEventListener('click',async()=>{
-  const city=document.getElementById('formOrt').value.trim();
+  const state=document.getElementById('listingState').value,district=document.getElementById('listingDistrict').value;
   const status=document.getElementById('listingLocationStatus');
-  if(!city){status.textContent='Bitte zuerst Ort und möglichst Postleitzahl eingeben.';return;}
-  const request=++locationRequest;
-  status.textContent='Ort wird gesucht …';
+  if(!AUSTRIAN_DISTRICTS[state]?.includes(district)){status.textContent='Bitte zuerst Bundesland und Bezirk auswählen.';return;}
+  const request=++locationRequest;status.textContent='Kartenpunkt wird geladen …';
   try{
-    await loadGoogleMaps();
-    const {results}=await new google.maps.Geocoder().geocode({address:city,region:'AT'});
-    if(request!==locationRequest)return;
-    if(!results?.length)throw new Error('Ort nicht gefunden. Bitte Ort, Postleitzahl und Land eingeben.');
-    const result=results[0];
-    document.getElementById('formOrt').value=result.formatted_address;
-    setListingLocation({lat:result.geometry.location.lat(),lng:result.geometry.location.lng()});
-    status.textContent+=' Gefunden: '+result.formatted_address+'. Bitte vor dem Veröffentlichen prüfen.';
-  }catch(error){if(request===locationRequest)status.textContent=error.message||'Ort konnte nicht gefunden werden.';}
+    const rows=await searchPlaces(districtQuery(state,district));if(request!==locationRequest)return;
+    if(!rows.length)throw new Error('Kein Kartenpunkt gefunden. Bitte erneut versuchen.');
+    const row=rows.find(r=>r.type==='administrative')||rows[0];
+    setListingLocation({lat:Number(row.lat),lng:Number(row.lon)});
+    status.textContent+=' Kartenpunkt für '+district+'.';
+  }catch(e){if(request===locationRequest)status.textContent=e.name==='AbortError'?'Das Laden dauert zu lange. Bitte erneut versuchen.':e.message;}
 });
+function populateListingDistricts(){
+  const state=document.getElementById('listingState').value,district=document.getElementById('listingDistrict');
+  district.replaceChildren(new Option(state?'Bezirk auswählen':'Zuerst Bundesland auswählen',''));
+  (AUSTRIAN_DISTRICTS[state]||[]).forEach(name=>district.appendChild(new Option(name,name)));
+  district.disabled=!state;
+}
+function syncListingRegion(value){
+  const state=document.getElementById('listingState');state.value='';
+  let selected='';
+  for(const [name,districts] of Object.entries(AUSTRIAN_DISTRICTS)){
+    const district=districts.find(d=>value===d+', '+name);
+    if(district){state.value=name;selected=district;break;}
+  }
+  populateListingDistricts();document.getElementById('listingDistrict').value=selected;
+  document.getElementById('listingRegionLabel').textContent=value?'Gespeicherter Standort: '+value:'';
+}
+function initListingDistrictPicker(){
+  const state=document.getElementById('listingState');
+  Object.keys(AUSTRIAN_DISTRICTS).forEach(name=>state.appendChild(new Option(name,name)));
+  state.onchange=()=>{populateListingDistricts();document.getElementById('formOrt').value='';document.getElementById('listingRegionLabel').textContent='';setListingLocation(null);};
+  document.getElementById('listingDistrict').onchange=()=>{
+    const district=document.getElementById('listingDistrict').value;
+    document.getElementById('formOrt').value=district?district+', '+state.value:'';
+    document.getElementById('listingRegionLabel').textContent='';setListingLocation(null);
+  };
+}
 async function renderMap(){
   if(!document.getElementById('view-map').classList.contains('active'))return;
-  const version=++mapRenderVersion;
   const status=document.getElementById('mapStatus');
-  status.textContent='Google Maps wird geladen …';
-  try{
-    await loadGoogleMaps();
-    if(version!==mapRenderVersion)return;
-    if(!googleMap){
-      googleMap=new google.maps.Map(document.getElementById('googleMap'),{center:{lat:47.7,lng:13.3},zoom:7,mapId:GOOGLE_MAPS_MAP_ID,streetViewControl:false,mapTypeControl:false,fullscreenControl:true});
-    }
-    mapMarkers.forEach(marker=>marker.map=null);
-    mapMarkers=[];
-    const active=listings.filter(l=>l.status==='aktiv' && validLocation(l));
-    const bounds=new google.maps.LatLngBounds();
-    // Group co-located listings so every listing remains accessible.
-    const groups=new Map();
-    active.forEach(l=>{const key=l.latitude+','+l.longitude;if(!groups.has(key))groups.set(key,[]);groups.get(key).push(l);});
-    groups.forEach(group=>{
-      const first=group[0];
-      const position={lat:first.latitude,lng:first.longitude};
-      const marker=new google.maps.marker.AdvancedMarkerElement({map:googleMap,position,title:group.length>1?`${group.length} Inserate an diesem Standort`:first.title});
-      marker.addListener('click',()=>{
-        if(group.length===1){showMapCard(first.id);return;}
-        const container=document.createElement('div');
-        const heading=document.createElement('h3');heading.textContent='Inserate an diesem Standort';container.appendChild(heading);
-        group.forEach(l=>{const button=document.createElement('button');button.className='btn btn-secondary';button.style.cssText='display:block;width:100%;margin-top:10px';button.textContent=l.title;button.onclick=()=>{closeSheet();openDetail(l.id);};container.appendChild(button);});
-        openSheet('');document.getElementById('sheetContent').appendChild(container);
-      });
-      mapMarkers.push(marker);bounds.extend(position);
-    });
-    if(active.length===1){googleMap.setCenter(bounds.getCenter());googleMap.setZoom(12);}
-    else if(active.length>1){googleMap.fitBounds(bounds,64);google.maps.event.addListenerOnce(googleMap,'idle',()=>{if(googleMap.getZoom()>14)googleMap.setZoom(14);});}
-    const missing=listings.filter(l=>l.status==='aktiv' && !validLocation(l)).length;
-    status.textContent=active.length?`${active.length} Inserate · ungefähre Standorte`:'Noch keine Inserate mit Kartenstandort.';
-    if(missing)status.textContent+=` · ${missing} ohne Standort`;
-    document.getElementById('mapCard').classList.remove('open');
-  }catch(error){status.textContent=error.message||'Karte konnte nicht geladen werden.';}
+  if(!window.L){status.textContent='Die Karte konnte nicht geladen werden. Die Inseratliste bleibt verfügbar.';return;}
+  if(!googleMap){
+    googleMap=L.map('googleMap').setView([47.7,13.3],7);
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'}).on('tileerror',()=>{status.textContent='Kartenhintergrund nicht erreichbar. Bitte später erneut versuchen.';}).addTo(googleMap);
+  }
+  googleMap.invalidateSize();mapMarkers.forEach(marker=>marker.remove());mapMarkers=[];
+  const active=listings.filter(l=>matchesDiscovery(l)&&validLocation(l));
+  const groups=new Map();
+  active.forEach(l=>{const key=l.latitude+','+l.longitude;if(!groups.has(key))groups.set(key,[]);groups.get(key).push(l);});
+  groups.forEach(group=>{
+    const first=group[0];const marker=L.marker([first.latitude,first.longitude],{title:group.length>1?group.length+' Inserate':first.title}).addTo(googleMap);
+    marker.on('click',()=>{if(group.length===1){showMapCard(first.id);return;}const container=document.createElement('div');const heading=document.createElement('h3');heading.textContent='Inserate an diesem Standort';container.appendChild(heading);group.forEach(l=>{const b=document.createElement('button');b.className='btn btn-secondary';b.style.cssText='display:block;width:100%;margin-top:10px';b.textContent=l.title;b.onclick=()=>{closeSheet();openDetail(l.id);};container.appendChild(b);});openSheet('');document.getElementById('sheetContent').appendChild(container);});mapMarkers.push(marker);
+  });
+  if(searchLocation){
+    const center=[searchLocation.lat,searchLocation.lng];
+    const circle=L.circle(center,{radius:radiusKm*1000,color:'#8C7CFF',fillOpacity:0.06}).addTo(googleMap);mapMarkers.push(circle);
+    mapMarkers.push(L.circleMarker(center,{radius:8,color:'#fff',weight:3,fillColor:'#4388ff',fillOpacity:1}).bindTooltip(searchLocationLabel).addTo(googleMap));
+    googleMap.fitBounds(circle.getBounds(),{padding:[30,30]});
+  }else if(active.length){googleMap.fitBounds(active.map(l=>[l.latitude,l.longitude]),{padding:[40,40],maxZoom:12});}
+  else googleMap.setView([47.7,13.3],7);
+  status.textContent=active.length+' Inserate'+(searchLocation?' im '+radiusKm+'-km-Umkreis':'')+' · ungefähre Standorte';
+  document.getElementById('mapCard').classList.remove('open');
 }
 function showMapCard(id){
   const l=listings.find(x=>String(x.id)===String(id));
@@ -3478,6 +3755,9 @@ setInterval(()=>{if(currentUser&&!document.hidden)refreshNoticeCount();},60000);
 window.addEventListener('focus',()=>refreshNoticeCount());
 
 /* ---------------- Init ---------------- */
+initDistrictPicker();
+initListingDistrictPicker();
+updateSearchLocationUI();
 renderFeed();
 renderChatlist();
 renderProfile();
