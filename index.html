@@ -855,6 +855,17 @@
   #radiusPanel{max-height:70dvh;overflow:auto;z-index:1100;}
   #mapStatus{z-index:500;top:75px;} .map-card{z-index:600;} #googleMap{z-index:0;}
   #locationResults button{display:block;width:100%;margin-top:8px;text-align:left;}
+
+  .listing-map-icon{background:none;border:0;}
+  .map-preview{display:flex;align-items:center;gap:7px;min-width:0;color:var(--ink);font:600 13px/1.3 'Inter',sans-serif;}
+  .listing-map-icon .map-preview{position:relative;width:156px;height:48px;padding:5px 8px 5px 5px;border:2px solid var(--forest);border-radius:12px;background:var(--card-bg);box-shadow:0 3px 12px #0005;}
+  .listing-map-icon .map-preview::after{content:'';position:absolute;bottom:-8px;left:70px;border-left:6px solid transparent;border-right:6px solid transparent;border-top:7px solid var(--forest);}
+  .map-preview-photo{flex:0 0 34px;width:34px;height:34px;border-radius:6px;overflow:hidden;background:var(--paper);display:grid;place-items:center;color:var(--muted);font-size:10px;}
+  .map-preview-photo img{width:100%;height:100%;object-fit:cover;display:block;}
+  .map-preview-title{overflow:hidden;white-space:nowrap;text-overflow:ellipsis;}
+  .map-preview-count{position:absolute;right:-7px;top:-10px;background:var(--forest);color:#fff;border-radius:12px;min-width:24px;padding:3px 5px;text-align:center;}
+  .listing-map-icon:focus-visible{outline:3px solid var(--gold);outline-offset:8px;border-radius:12px;}
+  .map-preview-button{display:block;width:100%;margin-top:10px;text-align:left;}
 </style>
 </head>
 <body>
@@ -3043,6 +3054,21 @@ function initListingDistrictPicker(){
     document.getElementById('listingRegionLabel').textContent='';setListingLocation(null);
   };
 }
+function mapTitlePreview(title){
+  const text=String(title||'Inserat');
+  const chars=typeof Intl.Segmenter==='function' ? Array.from(new Intl.Segmenter('de',{granularity:'grapheme'}).segment(text),x=>x.segment) : Array.from(text);
+  return chars.slice(0,10).join('');
+}
+function listingMapPreview(listing,count=1){
+  const root=document.createElement('span');root.className='map-preview';
+  const photo=document.createElement('span');photo.className='map-preview-photo';
+  const url=photoURLs(listing)[0];
+  if(url){const img=document.createElement('img');img.alt='';img.src=url;img.decoding='async';img.onerror=()=>{photo.textContent='Kein Bild';};photo.appendChild(img);}else photo.textContent='Kein Bild';
+  const title=document.createElement('span');title.className='map-preview-title';title.textContent=mapTitlePreview(listing.title);
+  root.append(photo,title);
+  if(count>1){const badge=document.createElement('span');badge.className='map-preview-count';badge.textContent='+'+(count-1);root.appendChild(badge);}
+  return root;
+}
 async function renderMap(){
   if(!document.getElementById('view-map').classList.contains('active'))return;
   const status=document.getElementById('mapStatus');
@@ -3056,8 +3082,10 @@ async function renderMap(){
   const groups=new Map();
   active.forEach(l=>{const key=l.latitude+','+l.longitude;if(!groups.has(key))groups.set(key,[]);groups.get(key).push(l);});
   groups.forEach(group=>{
-    const first=group[0];const marker=L.marker([first.latitude,first.longitude],{title:group.length>1?group.length+' Inserate':first.title}).addTo(googleMap);
-    marker.on('click',()=>{if(group.length===1){showMapCard(first.id);return;}const container=document.createElement('div');const heading=document.createElement('h3');heading.textContent='Inserate an diesem Standort';container.appendChild(heading);group.forEach(l=>{const b=document.createElement('button');b.className='btn btn-secondary';b.style.cssText='display:block;width:100%;margin-top:10px';b.textContent=l.title;b.onclick=()=>{closeSheet();openDetail(l.id);};container.appendChild(b);});openSheet('');document.getElementById('sheetContent').appendChild(container);});mapMarkers.push(marker);
+    const first=group[0];const label=group.length>1?first.title+' und '+(group.length-1)+' weitere Inserate':first.title;
+    const icon=L.divIcon({className:'listing-map-icon',html:listingMapPreview(first,group.length),iconSize:[156,48],iconAnchor:[78,55]});
+    const marker=L.marker([first.latitude,first.longitude],{icon,title:label,alt:label,keyboard:true}).addTo(googleMap);
+    marker.on('click',()=>{if(group.length===1){showMapCard(first.id);return;}const container=document.createElement('div');const heading=document.createElement('h3');heading.textContent='Inserate an diesem Standort';container.appendChild(heading);group.forEach(l=>{const b=document.createElement('button');b.className='btn btn-secondary map-preview-button';b.setAttribute('aria-label',l.title+' – Inserat öffnen');b.appendChild(listingMapPreview(l));b.onclick=()=>{closeSheet();openDetail(l.id);};container.appendChild(b);});openSheet('');document.getElementById('sheetContent').appendChild(container);});mapMarkers.push(marker);
   });
   if(searchLocation){
     const center=[searchLocation.lat,searchLocation.lng];
@@ -3074,7 +3102,7 @@ function showMapCard(id){
   if(!l)return;
   const card=document.getElementById('mapCard');card.replaceChildren();
   const button=document.createElement('button');button.className='btn btn-secondary';
-  button.textContent=l.title+' · '+l.ort+' → Anzeige öffnen';
+  button.setAttribute('aria-label',l.title+' – Inserat öffnen');button.appendChild(listingMapPreview(l));
   button.onclick=()=>openDetail(id);card.appendChild(button);card.classList.add('open');
 }
 
