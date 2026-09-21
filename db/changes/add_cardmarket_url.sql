@@ -1,0 +1,1 @@
+ALTER TABLE public.listings ADD COLUMN cardmarket_url text CHECK (cardmarket_url IS NULL OR (length(cardmarket_url) <= 2048 AND cardmarket_url ~ '^https://(www[.])?cardmarket[.]com([/?#][^[:space:]]*)?$'));

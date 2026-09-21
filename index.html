@@ -1185,6 +1185,12 @@
         <div class="field-error" id="errWants">Bitte angeben, wonach du suchst.</div>
       </div>
 
+      <div class="field">
+        <label class="field-label" for="formCardmarketUrl">Cardmarket-Link (optional)</label>
+        <input class="text-input" id="formCardmarketUrl" type="url" inputmode="url" maxlength="2048" placeholder="https://www.cardmarket.com/…" aria-describedby="errCardmarketUrl">
+        <div class="field-hint">Füge einen passenden Cardmarket-Link hinzu. Du kannst ihn später ändern oder entfernen.</div>
+        <div class="field-error" id="errCardmarketUrl"></div>
+      </div>
       <div class="field" id="priceField" style="display:none;">
         <div class="field-label">Preis</div>
         <div class="price-input-wrap">
@@ -1845,34 +1851,18 @@ function sellerBadgeHTML(seller){
   }
   return '';
 }
-const CARDMARKET_SLUGS = {
-  pokemon:'Pokemon', onepiece:'OnePiece', lorcana:'Lorcana', magic:'Magic', dragonball:'DragonBallSuper'
-};
-function cardmarketUrl(l){
-  const slug = CARDMARKET_SLUGS[l.game];
-  if(!slug) return null;
-  const term = l.title.split('(')[0].trim();
-  return `https://www.cardmarket.com/en/${slug}/Products/Search?searchString=${encodeURIComponent(term)}`;
+function normalizeCardmarketUrl(value){
+  const text=(value||'').trim();
+  if(!text)return null;
+  if(text.length>2048||/[\s\\]/.test(text))throw new Error('Bitte einen gültigen HTTPS-Link von cardmarket.com eingeben.');
+  let url;try{url=new URL(text);}catch{throw new Error('Bitte einen vollständigen Link mit https:// eingeben.');}
+  if(url.protocol!=='https:'||!['cardmarket.com','www.cardmarket.com'].includes(url.hostname)||url.username||url.password||url.port)throw new Error('Bitte einen HTTPS-Link von cardmarket.com eingeben.');
+  return url.href;
 }
 function marketBlockHTML(l){
-  const url = cardmarketUrl(l);
-  const cmIcon = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7M9 7h8v8"/></svg>`;
-  return `
-    <div class="detail-block market-block">
-      <div class="detail-block-label has" style="display:flex; align-items:center; justify-content:space-between;">
-        <span>Marktpreis</span>
-        ${url ? `<span class="cm-wordmark">Cardmarket</span>` : ''}
-      </div>
-      ${l.marketRange ? `
-        <div class="price-teaser">
-          <div class="market-value">${l.marketRange}</div>
-
-        </div>` : `<div class="detail-block-text" style="color:var(--muted); margin-top:4px;">Für diesen Artikel liegt noch keine Preisschätzung vor.</div>`}
-      ${url
-        ? `<a href="${url}" target="_blank" rel="noopener noreferrer" class="cm-link-btn">${cmIcon}Auf Cardmarket ansehen</a>`
-        : `<div class="field-hint" style="margin-top:8px;">${gameLabel(l.game)} wird aktuell nicht auf Cardmarket geführt.</div>`
-      }
-    </div>`;
+  let url;try{url=normalizeCardmarketUrl(l.cardmarketUrl);}catch{return '';}
+  if(!url)return '';
+  return `<div class="detail-block market-block"><div class="detail-block-label">Cardmarket</div><p class="field-hint">Vom Anbieter hinterlegter Link.</p><a href="${escapeHTML(url)}" target="_blank" rel="noopener noreferrer" class="cm-link-btn">Auf Cardmarket ansehen ↗</a></div>`;
 }
 function openDetail(id){
   currentListingId = id;
@@ -2516,11 +2506,12 @@ function openCreateForm(){
   document.getElementById('formHas').value = '';
   document.getElementById('formWants').value = '';
   document.getElementById('formPrice').value = '';
+  document.getElementById('formCardmarketUrl').value = '';
   document.getElementById('formStock').value = '1';
   document.getElementById('formOrt').value = '';
   syncListingRegion('');
   setListingLocation(null);
-  ['errTitle','errHas','errWants','errPrice'].forEach(id=>document.getElementById(id).classList.remove('show'));
+  ['errTitle','errHas','errWants','errPrice','errCardmarketUrl'].forEach(id=>document.getElementById(id).classList.remove('show'));
   document.querySelectorAll('#formMode .chip-opt').forEach(c=>c.classList.toggle('active', c.dataset.mode==='tausch'));
   document.querySelectorAll('#formGame .chip-opt').forEach(c=>c.classList.toggle('active', c.dataset.game==='pokemon'));
   updateModeFields();
@@ -2544,12 +2535,13 @@ function openEditForm(listing){
   document.getElementById('formHas').value = listing.has || '';
   document.getElementById('formWants').value = listing.wants || '';
   document.getElementById('formPrice').value = listing.preis ? parseFloat(listing.preis) : '';
+  document.getElementById('formCardmarketUrl').value = listing.cardmarketUrl || '';
   document.getElementById('formStock').value = listing.stock??1;
   document.getElementById('formOrt').value = (listing.ort || '').split(' · ')[0];
   syncListingRegion(document.getElementById('formOrt').value);
   setListingLocation(validLocation(listing) ? {lat:listing.latitude,lng:listing.longitude} : null);
 
-  ['errTitle','errHas','errWants','errPrice'].forEach(id=>document.getElementById(id).classList.remove('show'));
+  ['errTitle','errHas','errWants','errPrice','errCardmarketUrl'].forEach(id=>document.getElementById(id).classList.remove('show'));
   document.querySelectorAll('#formMode .chip-opt').forEach(c=>c.classList.toggle('active', c.dataset.mode===formMode));
   document.querySelectorAll('#formGame .chip-opt').forEach(c=>c.classList.toggle('active', c.dataset.game===formGame));
   updateModeFields();
@@ -2704,6 +2696,8 @@ document.getElementById('publishBtn').addEventListener('click',async()=>{
   const wants=document.getElementById('formWants').value.trim();
   const price=document.getElementById('formPrice').value.trim();
   const ort=document.getElementById('formOrt').value.trim();
+  let cardmarketUrl=null;const cmError=document.getElementById('errCardmarketUrl');cmError.classList.remove('show');
+  try{cardmarketUrl=normalizeCardmarketUrl(document.getElementById('formCardmarketUrl').value);}catch(e){cmError.textContent=e.message;cmError.classList.add('show');document.getElementById('formCardmarketUrl').focus();return;}
   const errors={errTitle:!title,errHas:!has,errWants:formMode==='tausch'&&!wants,errPrice:formMode==='verkauf'&&(!price||!Number.isFinite(Number(price))||Number(price)<0)};
   Object.entries(errors).forEach(([id,error])=>document.getElementById(id).classList.toggle('show',error));
   if(Object.values(errors).some(Boolean))return;
@@ -2717,7 +2711,7 @@ document.getElementById('publishBtn').addEventListener('click',async()=>{
   const form=document.querySelector('#view-create .form-scroll');form.inert=true;
   try{
     const user=await requireAuth();if(!user)return;
-    const values={stock,game:formGame,category:formCategory,mode:formMode,title,has_text:has,wants_text:formMode==='tausch'?wants:null,price:formMode==='verkauf'?Number(price):null,city:ort,latitude:listingLocation?.lat??null,longitude:listingLocation?.lng??null};
+    const values={cardmarket_url:cardmarketUrl,stock,game:formGame,category:formCategory,mode:formMode,title,has_text:has,wants_text:formMode==='tausch'?wants:null,price:formMode==='verkauf'?Number(price):null,city:ort,latitude:listingLocation?.lat??null,longitude:listingLocation?.lng??null};
     button.textContent='Wird gespeichert …';
     let id=editingListingId;
     if(id){
@@ -3143,7 +3137,7 @@ async function loadListingsFromSupabase(){
         has: row.has_text,
         wants: row.wants_text,
         preis: row.price ? row.price+' €' : undefined,
-        marketRange: row.market_range || undefined,
+        cardmarketUrl: row.cardmarket_url || null,
         ort: (row.city || 'Graz') + ' · online',
         zeit,
         seller: row.profiles ? {
