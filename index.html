@@ -479,10 +479,10 @@
   .meetup-opt-icon{width:34px;height:34px;border-radius:50%; background:rgba(140,124,255,0.16); color:var(--forest); display:flex;align-items:center;justify-content:center; flex-shrink:0;}
   .meetup-opt-title{font-size:13px; font-weight:700;}
   .meetup-opt-sub{font-size:11px; color:var(--muted);}
-  .boost-price{font-family:'Sora',sans-serif; font-size:26px; font-weight:600; color:var(--forest); text-align:center; margin:6px 0 2px;}
-  .boost-sub{font-size:12px; color:var(--muted); text-align:center; margin-bottom:16px;}
-  .plus-feature{display:flex; gap:10px; padding:9px 0; font-size:13px; align-items:flex-start;}
-  .plus-feature svg{width:17px;height:17px; stroke:var(--forest); flex-shrink:0; margin-top:1px;}
+
+
+
+
 
   /* ---- Quick actions in chat ---- */
   .quick-actions{display:flex; gap:8px; padding:0 14px 8px; overflow-x:auto; scrollbar-width:none;}
@@ -504,13 +504,10 @@
   .offer-row{display:flex; align-items:center; gap:8px; font-size:12.5px; margin-bottom:3px;}
   .offer-row .thumb{width:30px;height:40px; font-size:9px; flex-shrink:0;}
 
-  /* ---- Boosted / Verified listing highlight ---- */
-  .listing.boosted{border-color:var(--gold); box-shadow:0 0 0 1px var(--gold) inset;}
-  .boost-tag{
-    position:absolute; top:10px; left:10px; background:var(--gold); color:var(--forest);
-    font-size:10px; font-weight:700; padding:3px 8px; border-radius:999px; display:flex; align-items:center; gap:3px;
-  }
-  .boost-tag svg{width:10px;height:10px;}
+  /* ---- Verified listing highlight ---- */
+
+
+
 
   /* ---- Marktpreis Premium-Teaser (Cardmarket) ---- */
   .market-block{position:relative;}
@@ -520,12 +517,9 @@
   }
   .price-teaser{position:relative; border-radius:10px; overflow:hidden; background:var(--paper); padding:10px 12px; margin-top:6px;}
   .market-value{font-family:'Sora',sans-serif; font-size:19px; font-weight:600; color:var(--forest); filter:blur(5px); user-select:none;}
-  .market-lock{
-    position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px;
-    background:rgba(13,14,21,0.82); cursor:pointer;
-  }
-  .market-lock svg{width:18px;height:18px; stroke:var(--forest);}
-  .market-lock-text{font-size:11.5px; font-weight:700; color:var(--forest);}
+
+
+
   .cm-link-btn{
     display:flex; align-items:center; justify-content:center; gap:7px;
     width:100%; margin-top:10px; padding:11px; border-radius:11px;
@@ -546,7 +540,7 @@
   }
   .map-card.open{display:flex;}
 
-  /* ---- Radio-style boost/aktiv list item extra ---- */
+  /* ---- Active list item extra ---- */
   .listing-mini-actions{display:flex; gap:8px; margin-top:9px;}
   .mini-btn{
     flex:1; padding:8px; border-radius:9px; border:1px solid var(--line); background:var(--card-bg);
@@ -709,8 +703,8 @@
   .trade-row{color:#C2BFCD;font-size:12px;}
   .trade-label{font-weight:500;}
   .tag-mode{font-weight:500;font-size:10px;}
-  .listing.boosted{border-color:rgba(255,194,75,.45);box-shadow:none;}
-  .boost-tag{left:4px;top:24px;}
+
+
   .empty-state{padding:48px 20px;line-height:1.7;}
   .navbar{border:0;border-top:1px solid var(--line);border-radius:0;box-shadow:none;background:var(--paper);margin:0;padding:8px 12px calc(8px + env(safe-area-inset-bottom));width:100%;max-width:none;gap:4px;}
   .navitem{border-radius:10px;font-size:11px;padding:9px 6px;}
@@ -807,7 +801,7 @@
   .feed>.listing:nth-child(3n+2),.profile-list>.listing:nth-child(3n+2){--listing-accent:91,198,180;}
   .feed>.listing:nth-child(3n),.profile-list>.listing:nth-child(3n){--listing-accent:222,174,112;}
   .feed>.listing .fav-btn,.profile-list>.listing .fav-btn{right:10px;}
-  .feed>.listing.boosted,.profile-list>.listing.boosted{border-left-color:var(--gold);}
+
   @media (hover:hover){
     .feed>.listing:hover,.profile-list>.listing:hover{
       background:linear-gradient(90deg,rgba(var(--listing-accent),.13),rgba(var(--listing-accent),.035) 85%);
@@ -1378,7 +1372,6 @@ const conversations = [];
 
 let activeMode='alle', activeGame='alle', activeCategory='alle', activeSort='relevanz', currentListingId=null, currentChatId=null, activePTab='aktiv';
 let favorites = new Set();
-let plusUnlocked = false;
 let radiusKm = 5;
 let searchLocation = null;
 let searchLocationRequest = 0;
@@ -1582,12 +1575,6 @@ function wireListingCards(container){
       toggleFavorite(btn.dataset.favid, btn);
     });
   });
-  container.querySelectorAll('[data-boostid]').forEach(btn=>{
-    btn.addEventListener('click', (e)=>{
-      e.stopPropagation();
-      openBoostSheet(btn.dataset.boostid);
-    });
-  });
   container.querySelectorAll('[data-rateid]').forEach(btn=>{
     btn.addEventListener('click', (e)=>{
       e.stopPropagation();
@@ -1619,9 +1606,8 @@ function listingCardHTML(l, opts={}){
   const showStatus = opts.showStatus;
   const showFav = !l.mine;
   return `
-    <div class="listing ${l.boosted?'boosted':''} ${showFav?'has-fav':''}" data-id="${l.id}">
+    <div class="listing ${showFav?'has-fav':''}" data-id="${l.id}">
       ${thumbHTML(l)}
-      ${l.boosted ? `<div class="boost-tag"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2 9 9l-7 1 5 5-1 7 6-3 6 3-1-7 5-5-7-1Z"/></svg>Top</div>` : ''}
       ${showFav ? `<button class="fav-btn ${favorites.has(l.id)?'active':''}" data-favid="${l.id}">
         <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20s-7-4.4-9.5-9A5.5 5.5 0 0 1 12 6a5.5 5.5 0 0 1 9.5 5c-2.5 4.6-9.5 9-9.5 9Z"/></svg>
       </button>` : ''}
@@ -1644,9 +1630,6 @@ function listingCardHTML(l, opts={}){
         </div>
         ${showStatus && l.status==='aktiv' ? `
           <div class="listing-mini-actions">
-            ${l.boosted
-              ? `<button class="mini-btn gold" disabled>★ Bereits hervorgehoben</button>`
-              : `<button class="mini-btn gold" data-boostid="${l.id}">Anzeige hervorheben</button>`}
             <button class="mini-btn" data-editid="${l.id}">Bearbeiten</button>
             <button class="mini-btn danger" data-deleteid="${l.id}">Löschen</button>
           </div>` : ''}
@@ -1670,7 +1653,7 @@ function renderFeed(){
   } else if(activeSort==='alt'){
     filtered = filtered.slice().sort((a,b)=>b.postedHoursAgo-a.postedHoursAgo);
   } else {
-    filtered = filtered.slice().sort((a,b)=>(b.boosted?1:0)-(a.boosted?1:0));
+    filtered = filtered.slice().sort((a,b)=>a.postedHoursAgo-b.postedHoursAgo);
   }
   feed.innerHTML = filtered.length
     ? filtered.map(l=>listingCardHTML(l)).join('')
@@ -1877,10 +1860,7 @@ function marketBlockHTML(l){
       ${l.marketRange ? `
         <div class="price-teaser">
           <div class="market-value">${l.marketRange}</div>
-          ${!plusUnlocked ? `<div class="market-lock" id="marketLockBtn">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="10" width="14" height="9" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
-            <div class="market-lock-text">Mit traderei Plus freischalten</div>
-          </div>` : ''}
+
         </div>` : `<div class="detail-block-text" style="color:var(--muted); margin-top:4px;">Für diesen Artikel liegt noch keine Preisschätzung vor.</div>`}
       ${url
         ? `<a href="${url}" target="_blank" rel="noopener noreferrer" class="cm-link-btn">${cmIcon}Auf Cardmarket ansehen</a>`
@@ -1898,7 +1878,6 @@ function openDetail(id){
       <button class="detail-fav ${favorites.has(l.id)?'active':''}" id="detailFavBtn">
         <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20s-7-4.4-9.5-9A5.5 5.5 0 0 1 12 6a5.5 5.5 0 0 1 9.5 5c-2.5 4.6-9.5 9-9.5 9Z"/></svg>
       </button>
-      ${l.boosted ? `<div class="boost-tag"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2 9 9l-7 1 5 5-1 7 6-3 6 3-1-7 5-5-7-1Z"/></svg>Hervorgehoben</div>` : ''}
     </div>
     <div class="detail-title">${l.title}</div><p class="field-hint">${l.stock??1} Stück frei verfügbar</p>
     <div class="detail-meta-row">
@@ -1923,8 +1902,6 @@ function openDetail(id){
   `;
   wireDetailGallery(l);
   document.getElementById('detailFavBtn').addEventListener('click', ()=>toggleFavorite(l.id, document.getElementById('detailFavBtn')));
-  const lockBtn = document.getElementById('marketLockBtn');
-  if(lockBtn) lockBtn.addEventListener('click', openPlusSheet);
   document.getElementById('sellerRow').addEventListener('click', ()=>{
     if(l.seller.type==='shop'){
       openShopProfile(l.seller.id || l.ownerId, 'detail');
@@ -2923,45 +2900,6 @@ function openRatingSheet(id){
   });
 }
 
-/* ---------------- Anzeige hervorheben (Boost) ---------------- */
-function openBoostSheet(id){
-  openSheet(`
-    <button class="sheet-close" onclick="closeSheet()">✕</button>
-    <div class="sheet-title">Anzeige hervorheben</div>
-    <div class="sheet-sub">Deine Anzeige erscheint 3 Tage lang ganz oben im Feed und bekommt ein Top-Label.</div>
-    <div class="boost-price">2,99 €</div>
-    <div class="boost-sub">Einmalig, für 3 Tage</div>
-    <button class="btn btn-primary" style="width:100%;" id="confirmBoostBtn">Jetzt hervorheben</button>
-  `);
-  document.getElementById('confirmBoostBtn').addEventListener('click', ()=>{
-    const l = listings.find(x=>String(x.id)===String(id));
-    l.boosted = true;
-    closeSheet();
-    showToastMsg('Anzeige ist jetzt hervorgehoben');
-    renderFeed(); renderProfile();
-  });
-}
-
-/* ---------------- traderei Plus ---------------- */
-function openPlusSheet(){
-  openSheet(`
-    <button class="sheet-close" onclick="closeSheet()">✕</button>
-    <div class="sheet-title">traderei Plus</div>
-    <div class="sheet-sub">Mehr Durchblick für ambitionierte Trader.</div>
-    <div class="plus-feature"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M5 12.5 9.5 17 19 7"/></svg>Marktpreise für alle Karten & Displays</div>
-    <div class="plus-feature"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M5 12.5 9.5 17 19 7"/></svg>Unbegrenzte hervorgehobene Anzeigen</div>
-    <div class="plus-feature"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M5 12.5 9.5 17 19 7"/></svg>Preis-Alerts für deine Wunschkarten</div>
-    <div class="boost-price">4,99 € <span style="font-size:13px; color:var(--muted); font-weight:600;">/ Monat</span></div>
-    <button class="btn btn-primary" style="width:100%; margin-top:8px;" id="unlockPlusBtn">Plus freischalten</button>
-  `);
-  document.getElementById('unlockPlusBtn').addEventListener('click', ()=>{
-    plusUnlocked = true;
-    closeSheet();
-    showToastMsg('traderei Plus aktiviert');
-    if(currentListingId) openDetail(currentListingId);
-  });
-}
-
 /* ---------------- Karte ---------------- */
 let listingLocation = null;
 let locationRequest = 0;
@@ -3199,7 +3137,6 @@ async function loadListingsFromSupabase(){
         wants: row.wants_text,
         preis: row.price ? row.price+' €' : undefined,
         marketRange: row.market_range || undefined,
-        boosted: !!row.boosted,
         ort: (row.city || 'Graz') + ' · online',
         zeit,
         seller: row.profiles ? {
