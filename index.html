@@ -860,6 +860,8 @@
   .map-preview-count{position:absolute;right:-7px;top:-10px;background:var(--forest);color:#fff;border-radius:12px;min-width:24px;padding:3px 5px;text-align:center;}
   .listing-map-icon:focus-visible{outline:3px solid var(--gold);outline-offset:8px;border-radius:12px;}
   .map-preview-button{display:block;width:100%;margin-top:10px;text-align:left;}
+
+.legal-footer{display:flex;flex-shrink:0;justify-content:center;gap:20px;padding:7px 12px;background:var(--paper);font-size:12px;}.legal-footer a{color:var(--muted);}.auth-terms{display:flex;align-items:flex-start;gap:8px;font-size:14px;line-height:1.5;margin-top:12px;}.auth-terms input{margin-top:5px;flex-shrink:0;}.auth-terms a,.auth-privacy a{color:var(--forest);}
 </style>
 </head>
 <body>
@@ -1300,6 +1302,7 @@
     </div>
   </div>
 
+  <nav class="legal-footer" aria-label="Rechtliches"><a href="/agb.html">AGB</a><a href="/datenschutz.html">Datenschutz</a><a href="/impressum.html">Impressum</a></nav>
   <!-- ============ GENERISCHES SHEET / OVERFLOW-MENÜ ============ -->
   <div class="overlay" id="sheetOverlay">
     <div class="sheet" id="sheetContent"></div>
@@ -2306,22 +2309,12 @@ document.getElementById('menuRatings').addEventListener('click', ()=>{
   `);
 });
 
-const LEGAL_TEXT = {
-  menuAgb: ['AGB', 'Platzhaltertext für den Prototyp: Hier stünden die allgemeinen Geschäftsbedingungen für die Nutzung von traderei.'],
-  menuDatenschutz: ['Datenschutz', 'Platzhaltertext für den Prototyp: Hier stünde die Datenschutzerklärung, inklusive welche Daten gespeichert und wie sie verwendet werden.'],
-  menuImpressum: ['Impressum', 'Platzhaltertext für den Prototyp: Hier stünden Anbieterkennzeichnung, Kontaktadresse und Unternehmensangaben.'],
-  menuInfo: ['Informationen', 'Platzhaltertext für den Prototyp: Hier stünden App-Version, Hilfe/FAQ und Kontaktmöglichkeiten.']
-};
-Object.keys(LEGAL_TEXT).forEach(id=>{
-  document.getElementById(id).addEventListener('click', ()=>{
-    const [title, text] = LEGAL_TEXT[id];
-    openSheet(`
-      <button class="sheet-close" onclick="closeSheet()">✕</button>
-      <div class="sheet-title">${title}</div>
-      <div class="sheet-sub">${text}</div>
-    `);
-  });
+const LEGAL_LINKS={menuAgb:'/agb.html',menuDatenschutz:'/datenschutz.html',menuImpressum:'/impressum.html'};
+Object.entries(LEGAL_LINKS).forEach(([id,url])=>{
+ const old=document.getElementById(id),link=document.createElement('a');
+ link.id=id;link.className=old.className;link.href=url;link.style.cssText='color:inherit;text-decoration:none';link.innerHTML=old.innerHTML;old.replaceWith(link);
 });
+document.getElementById('menuInfo').addEventListener('click',()=>openSheet('<button class="sheet-close" onclick="closeSheet()">✕</button><h2>Über traderei</h2><p>traderei ist kostenlos und erzielt keine Einnahmen aus der App. Preise, Tausch und Übergabe vereinbaren die Nutzer selbst.</p><p><a href="mailto:kontakt@traderei.at">kontakt@traderei.at</a></p>'));
 
 /* ---------------- Echter Login-Status im Profil ---------------- */
 let currentUser = null;
@@ -2609,6 +2602,8 @@ function openAuthSheet(resolve){
       ` : ''}
       <input class="text-input" id="authEmail" type="email" placeholder="E-Mail" style="margin-bottom:10px;">
       <input class="text-input" id="authPassword" type="password" placeholder="Passwort (min. 6 Zeichen)">
+      ${mode==='signup' ? `<label class="auth-terms"><input type="checkbox" id="authAcceptTerms"><span>Ich akzeptiere die <a href="/agb.html" target="_blank" rel="noopener">AGB</a>.</span></label>` : ''}
+      <p class="field-hint auth-privacy">Informationen zur Verarbeitung deiner Daten findest du in der <a href="/datenschutz.html" target="_blank" rel="noopener">Datenschutzerklärung</a>.</p>
       <div class="field-error" id="authError" style="margin-top:8px;"></div>
       <button class="btn btn-primary" style="width:100%; margin-top:12px;" id="authSubmitBtn">${mode==='signup' ? 'Registrieren' : 'Einloggen'}</button>
       <div style="text-align:center; margin-top:14px; font-size:12.5px; color:var(--muted);">
@@ -2630,6 +2625,7 @@ function openAuthSheet(resolve){
       let firstName = '', lastName = '', displayName = '';
       let dealerData={account_type:'private'};
       if(mode==='signup'){
+        if(!document.getElementById('authAcceptTerms').checked){errEl.textContent='Bitte lies und akzeptiere die AGB.';errEl.classList.add('show');return;}
         firstName = document.getElementById('authFirstName').value.trim();
         lastName = document.getElementById('authLastName').value.trim();
         displayName = document.getElementById('authDisplayName').value.trim();
