@@ -4,12 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>traderei – Lokal tauschen</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700;800&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="/assets/supabase.min.js"></script>
+<link rel="stylesheet" href="/assets/leaflet.css">
+<script src="/assets/leaflet.js"></script>
 <style>
   :root{
     --paper:#0D0E15;
@@ -862,6 +859,8 @@
   .map-preview-button{display:block;width:100%;margin-top:10px;text-align:left;}
 
 .legal-footer{display:flex;flex-shrink:0;justify-content:center;gap:20px;padding:7px 12px;background:var(--paper);font-size:12px;}.legal-footer a{color:var(--muted);}.auth-terms{display:flex;align-items:flex-start;gap:8px;font-size:14px;line-height:1.5;margin-top:12px;}.auth-terms input{margin-top:5px;flex-shrink:0;}.auth-terms a,.auth-privacy a{color:var(--forest);}
+
+#cookieDialog{max-width:620px;width:calc(100% - 24px);max-height:90dvh;overflow:auto;background:var(--card-bg);color:var(--ink);border:1px solid var(--line);border-radius:16px;padding:24px;font:14px/1.6 system-ui,sans-serif;}#cookieDialog::backdrop{background:#0008;}#cookieDialog h2{margin-top:0;font-size:22px;}#cookieDialog a{color:var(--forest-light);} .cookie-actions{display:flex;flex-wrap:wrap;gap:10px;margin:18px 0}.cookie-actions button{flex:1 1 150px;padding:12px;border:1px solid var(--forest-light);border-radius:8px;background:var(--card-bg-2);color:var(--ink);font:600 14px system-ui;cursor:pointer}.cookie-actions button[hidden]{display:none}.cookie-option{display:flex;align-items:flex-start;gap:10px}.cookie-option input{margin-top:6px;flex-shrink:0}#cookieDialog button:focus-visible,#cookieDialog a:focus-visible{outline:3px solid var(--gold);outline-offset:3px}.legal-footer{flex-wrap:wrap;gap:8px 16px}.legal-footer button{background:none;border:0;color:var(--muted);font:inherit;text-decoration:underline;cursor:pointer;padding:0}#mapStatus{pointer-events:auto;}
 </style>
 </head>
 <body>
@@ -1302,7 +1301,7 @@
     </div>
   </div>
 
-  <nav class="legal-footer" aria-label="Rechtliches"><a href="/agb.html">AGB</a><a href="/datenschutz.html">Datenschutz</a><a href="/impressum.html">Impressum</a></nav>
+  <nav class="legal-footer" aria-label="Rechtliches"><button type="button" data-cookie-settings>Cookie-Einstellungen</button><a href="/agb.html">AGB</a><a href="/datenschutz.html">Datenschutz</a><a href="/impressum.html">Impressum</a></nav>
   <!-- ============ GENERISCHES SHEET / OVERFLOW-MENÜ ============ -->
   <div class="overlay" id="sheetOverlay">
     <div class="sheet" id="sheetContent"></div>
@@ -1311,6 +1310,7 @@
   <div class="toast" id="globalToast" style="z-index:40;"></div>
 </div>
 
+<script src="/assets/consent.js"></script>
 <script>
 /* ---------------- Supabase-Anbindung ---------------- */
 // TODO: Hier deine echten Werte aus Supabase → Project Settings → API eintragen
@@ -1777,18 +1777,21 @@ function useMySearchLocation(){
     status.textContent=error.code===1?'Freigabe abgelehnt. Du kannst oben Bundesland und Bezirk auswählen.':error.code===3?'Die Standortabfrage dauert zu lange. Erneut versuchen oder Bundesland und Bezirk auswählen.':'Standort nicht verfügbar. Bitte Bundesland und Bezirk auswählen.';
   },{enableHighAccuracy:true,timeout:15000,maximumAge:60000});
 }
+let activeGeocodeController=null;
 async function searchPlaces(query){
+  if(!window.TradereiConsent?.requireMaps())throw new Error('Für die Bezirkssuche bitte externe Karten in den Cookie-Einstellungen erlauben und danach erneut übernehmen.');
   if(geoSearchCache.has(query))return geoSearchCache.get(query);
   if(geoSearchBusy||Date.now()-lastGeoSearchAt<1100)throw new Error('Bitte kurz warten und erneut suchen.');
   geoSearchBusy=true;lastGeoSearchAt=Date.now();
-  const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),12000);
+  const controller=new AbortController();activeGeocodeController=controller;const timer=setTimeout(()=>controller.abort(),12000);
   try{
     const response=await fetch('https://nominatim.openstreetmap.org/search?'+new URLSearchParams({q:query,format:'jsonv2',limit:'5',countrycodes:'at','accept-language':'de'}),{signal:controller.signal});
     if(!response.ok)throw new Error('Ortssuche derzeit nicht erreichbar. Bitte später erneut versuchen.');
     const rows=await response.json();
+    if(!window.TradereiConsent?.mapsAllowed())throw new Error('Die Zustimmung zu externen Karten wurde widerrufen.');
     const result=rows.filter(r=>validLocation({latitude:Number(r.lat),longitude:Number(r.lon)}));
     geoSearchCache.set(query,result);return result;
-  }finally{clearTimeout(timer);geoSearchBusy=false;}
+  }finally{clearTimeout(timer);geoSearchBusy=false;if(activeGeocodeController===controller)activeGeocodeController=null;}
 }
 document.getElementById('useMyLocationBtn').onclick=useMySearchLocation;
 document.getElementById('centerMapBtn').onclick=(e)=>{e.stopPropagation();if(searchLocation){renderMap();}else{showView('feed');useMySearchLocation();}};
@@ -2915,6 +2918,7 @@ function setListingLocation(position){
     : 'Kein Kartenstandort gewählt. Dein Inserat erscheint nur in der Liste.';
 }
 function loadGoogleMaps(){
+  if(!window.TradereiConsent?.requireMaps())return Promise.reject(new Error('Bitte zuerst externe Karten erlauben.'));
   if(window.google?.maps?.Map) return Promise.resolve();
   if(mapsLoading) return mapsLoading;
   if(!GOOGLE_MAPS_API_KEY) return Promise.reject(new Error('Die Kartenfunktion ist noch nicht eingerichtet.'));
@@ -3006,6 +3010,7 @@ function listingMapPreview(listing,count=1){
 async function renderMap(){
   if(!document.getElementById('view-map').classList.contains('active'))return;
   const status=document.getElementById('mapStatus');
+  if(!window.TradereiConsent?.mapsAllowed()){status.replaceChildren();const message=document.createElement('p');message.textContent='Externe Karten sind deaktiviert. Deine Inseratliste bleibt verfügbar.';const button=document.createElement('button');button.className='btn btn-secondary';button.textContent='Cookie-Einstellungen';button.setAttribute('data-cookie-settings','');status.append(message,button);return;}
   if(!window.L){status.textContent='Die Karte konnte nicht geladen werden. Die Inseratliste bleibt verfügbar.';return;}
   if(!googleMap){
     googleMap=L.map('googleMap').setView([47.7,13.3],7);
@@ -3715,6 +3720,16 @@ document.querySelectorAll('[data-dealer-panel]').forEach(b=>b.onclick=()=>openDe
 setInterval(()=>{if(currentUser&&!document.hidden)refreshNoticeCount();},60000);
 window.addEventListener('focus',()=>refreshNoticeCount());
 
+window.addEventListener('traderei-consent-change',()=>{
+  if(!window.TradereiConsent?.mapsAllowed()){
+    activeGeocodeController?.abort();geoSearchCache.clear();searchLocationRequest++;locationRequest++;
+    mapMarkers.forEach(marker=>marker.remove());mapMarkers=[];
+    if(googleMap){googleMap.remove();googleMap=null;}
+    document.getElementById('mapCard').classList.remove('open');
+    document.getElementById('useMyLocationBtn').disabled=false;
+  }
+  renderMap();
+});
 /* ---------------- Init ---------------- */
 initDistrictPicker();
 initListingDistrictPicker();
