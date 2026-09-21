@@ -830,7 +830,7 @@
   }
 
   .dealer-row{display:flex;align-items:center;gap:18px;width:100%;padding:22px 18px;background:none;border:0;border-bottom:1px solid var(--line);color:var(--ink);text-align:left;cursor:pointer;}
-  .dealer-row>span:nth-child(2){flex:1}.dealer-row small{display:block;color:var(--muted);margin-top:7px}.dealer-symbol{color:var(--forest);font-weight:700;font-size:20px;width:50px;}
+  .dealer-row>span:nth-child(2){flex:1}.dealer-row small{display:block;color:var(--muted);margin-top:7px}.dealer-symbol{color:var(--forest);font-weight:700;font-size:20px;width:50px;height:50px;border-radius:12px;display:grid;place-items:center;flex-shrink:0;overflow:hidden;}.dealer-symbol img{width:100%;height:100%;object-fit:cover;display:block;}.shop-profile-avatar{width:78px;height:78px;margin:0 auto 12px;border-radius:22px;display:grid;place-items:center;background:var(--gold);color:var(--forest);font-size:28px;font-weight:700;overflow:hidden;}.shop-profile-avatar img{width:100%;height:100%;object-fit:cover;display:block;}
   #authDealerFields .field-label{display:block;margin-top:14px;}
   .detail-photo-open{display:block;position:relative;width:100%;border:0;padding:0;background:var(--card-bg);border-radius:12px;overflow:hidden;cursor:zoom-in;}
   .detail-photo-open>img{display:block;width:100%;height:300px;object-fit:contain;}.detail-photo-open>span{position:absolute;bottom:10px;left:10px;background:#000b;color:white;border-radius:8px;padding:7px 10px;font-size:12px;}
@@ -3054,7 +3054,9 @@ async function loadDealers(){
   const {data,error}=await supabaseClient.from('shops').select('id,owner_id,shop_name,address,opening_hours,description,is_verified').order('shop_name');
   if(version!==dealerLoadVersion)return;
   if(error){root.textContent='Händler konnten nicht geladen werden. Bitte später erneut versuchen.';return;}
-  dealerRows=data||[];renderDealers();
+  const ownerIds=(data||[]).map(r=>r.owner_id).filter(Boolean);let avatars={};
+  if(ownerIds.length){const {data:profiles}=await supabaseClient.from('profiles').select('id,avatar_url').in('id',ownerIds);(profiles||[]).forEach(p=>{avatars[p.id]=p.avatar_url||'';});}
+  dealerRows=(data||[]).map(r=>({...r,avatar_url:avatars[r.owner_id]||''}));renderDealers();
 }
 function renderDealers(){
   const root=document.getElementById('dealerList'),q=document.getElementById('dealerSearch').value.trim().toLocaleLowerCase('de');
@@ -3062,7 +3064,8 @@ function renderDealers(){
   if(!rows.length){root.innerHTML='<div class="empty-state">'+(dealerRows.length?'Keine passenden Händler gefunden.':'Noch keine Händler registriert.')+'</div>';return;}
   rows.forEach(shop=>{
     const button=document.createElement('button');button.className='dealer-row';
-    button.innerHTML='<span class="dealer-symbol">'+escapeHTML(initials(shop.shop_name))+'</span><span><strong>'+escapeHTML(shop.shop_name)+'</strong> '+dealerBadge(shop)+'<small>'+escapeHTML(shop.address||'Kein Ort angegeben')+'</small></span><span aria-hidden="true">→</span>';
+    const avatar=shop.avatar_url?'<img src="'+escapeHTML(shop.avatar_url)+'" alt="">':escapeHTML(initials(shop.shop_name));
+    button.innerHTML='<span class="dealer-symbol">'+avatar+'</span><span><strong>'+escapeHTML(shop.shop_name)+'</strong> '+dealerBadge(shop)+'<small>'+escapeHTML(shop.address||'Kein Ort angegeben')+'</small></span><span aria-hidden="true">→</span>';
     button.onclick=()=>openShopProfile(shop.owner_id,'dealers');root.appendChild(button);
   });
 }
@@ -3072,9 +3075,12 @@ async function openShopProfile(ownerId,from='dealers'){
   if(!ownerId||!supabaseClient){root.textContent='Händlerprofil nicht verfügbar.';return;}
   const {data:shop,error}=await supabaseClient.from('shops').select('shop_name,address,opening_hours,description,is_verified').eq('owner_id',ownerId).maybeSingle();
   if(error||!shop){root.textContent='Für diesen Händler ist noch kein Geschäftsprofil hinterlegt.';return;}
+  const {data:profile}=await supabaseClient.from('profiles').select('display_name,avatar_url').eq('id',ownerId).maybeSingle();
+  shop.avatar_url=profile?.avatar_url||'';shop.display_name=profile?.display_name||shop.shop_name;
   await loadListingsFromSupabase();
   const items=listings.filter(l=>l.status==='aktiv'&&l.ownerId===ownerId);
-  root.innerHTML=`<div class="profile-head"><div class="profile-name">${escapeHTML(shop.shop_name)}</div><div class="profile-sub">${dealerBadge(shop)} · ${items.length} aktive Inserate</div></div>
+  const profileAvatar=shop.avatar_url?'<img src="'+escapeHTML(shop.avatar_url)+'" alt="Profilbild von '+escapeHTML(shop.shop_name)+'">':escapeHTML(initials(shop.shop_name));
+  root.innerHTML=`<div class="profile-head"><div class="shop-profile-avatar">${profileAvatar}</div><div class="profile-name">${escapeHTML(shop.shop_name)}</div><div class="profile-sub">${dealerBadge(shop)} · ${items.length} aktive Inserate</div></div>
     <div class="detail-block"><div class="field-label">Standort</div><p>${escapeHTML(shop.address||'Nicht angegeben')}</p>${shop.opening_hours?'<div class="field-label">Öffnungszeiten</div><p>'+escapeHTML(shop.opening_hours)+'</p>':''}${shop.description?'<p style="white-space:pre-wrap">'+escapeHTML(shop.description)+'</p>':''}</div>
     <div id="shopExtras" class="tool-body"></div><div class="shop-section-label">Inserate dieses Händlers</div><div class="profile-list" id="shopItemList"></div>`;
   const list=document.getElementById('shopItemList');list.innerHTML=items.length?items.map(l=>listingCardHTML(l)).join(''):'<div class="empty-state">Aktuell keine aktiven Inserate.</div>';wireListingCards(list);
@@ -3644,26 +3650,33 @@ async function renderInventory(){
  if(!rows.length)body.innerHTML='<tr><td colspan="6">Noch keine Inserate. Erstelle eines oder importiere eine CSV-Datei.</td></tr>';
 }
 function parseDealerCSV(text){
- text=text.replace(/^\uFEFF/,'');let delim=';',quoted=false;
+  text=text.replace(/^\uFEFF/,'');let delim=';',quoted=false;
  const first=text.split(/\r?\n/)[0];if(!first.includes(';'))delim=',';
  const rows=[];let row=[],cell='';
  for(let i=0;i<text.length;i++){const c=text[i];if(c==='"'){if(quoted&&text[i+1]==='"'){cell+='"';i++;}else quoted=!quoted;}else if(c===delim&&!quoted){row.push(cell.trim());cell='';}else if((c==='\n'||c==='\r')&&!quoted){if(c==='\r'&&text[i+1]==='\n')i++;row.push(cell.trim());if(row.some(Boolean))rows.push(row);row=[];cell='';}else cell+=c;}
  if(quoted)throw new Error('Nicht geschlossenes Anführungszeichen in der CSV-Datei.');row.push(cell.trim());if(row.some(Boolean))rows.push(row);
  if(rows.length<2)throw new Error('Die CSV-Datei enthält keine Inserate.');if(rows.length>101)throw new Error('Maximal 100 Inserate pro Import.');
- const headers=rows.shift().map(x=>x.toLowerCase());const required=['titel','spiel','kategorie','art','preis','bestand','ort','beschreibung','tauschwunsch'];
+ const headers=rows.shift().map(x=>x.replace(/^\uFEFF/,'').trim().toLowerCase());const required=['titel','spiel','kategorie','art','preis','bestand','ort','beschreibung','tauschwunsch'];
  if(headers.length!==required.length||new Set(headers).size!==headers.length||required.some(h=>!headers.includes(h)))throw new Error('Bitte die Spalten der CSV-Vorlage verwenden.');
  return rows.map((r,index)=>{
- if(r.length!==headers.length)throw new Error(`Zeile ${index+2}: falsche Spaltenanzahl.`);
- const obj=Object.fromEntries(headers.map((h,i)=>[h,r[i]]));const game=obj.spiel.toLowerCase(),mode=({'kaufen':'verkauf','verkaufen':'verkauf','verkauf':'verkauf','tauschen':'tausch','tausch':'tausch'})[obj.art.toLowerCase()],stock=Number(obj.bestand),price=Number(obj.preis.replace(',','.'));
- if(!obj.titel||obj.titel.length>200||!obj.beschreibung||!obj.ort||!CATEGORY_SETS[game]?.some(c=>c[0]===obj.kategorie)||!mode||!obj.bestand||!Number.isInteger(stock)||stock<0||stock>2147483647||mode==='verkauf'&&(!obj.preis||!Number.isFinite(price)||price<0)||mode==='tausch'&&!obj.tauschwunsch)throw new Error(`Zeile ${index+2}: Titel, Spiel, Kategorie, Art, Preis, Bestand oder Pflichtangaben prüfen.`);
- return {id:crypto.randomUUID(),title:obj.titel,game,category:obj.kategorie,mode,price:mode==='verkauf'?price:null,stock,city:obj.ort,has_text:obj.beschreibung,wants_text:mode==='tausch'?obj.tauschwunsch:null,status:'aktiv'};
+  if(r.length!==headers.length)throw new Error(`Zeile ${index+2}: falsche Spaltenanzahl.`);
+  const obj=Object.fromEntries(headers.map((h,i)=>[h,(r[i]||'').trim()]));
+  const gameAliases={'pokemon':'pokemon','pokémon':'pokemon','pokémon tcg':'pokemon','one piece':'onepiece','onepiece':'onepiece','one piece tcg':'onepiece','lorcana':'lorcana','magic':'magic','magic: the gathering':'magic','dragonball':'dragonball','dragon ball':'dragonball','dragon ball tcg':'dragonball','naruto':'naruto','naruto tcg':'naruto','sonstige':'sonstige','sonstige tcg':'sonstige'};
+  const categoryAliases={'einzel':'einzel','einzelkarte':'einzel','einzelkarten':'einzel','graded':'graded','graded slabs':'graded','display':'display','displays':'display','booster':'booster','blister':'blister','sammlerbox':'sammlerbox','sammlerboxen':'sammlerbox','sonstiges':'sonstiges'};
+  const game=gameAliases[obj.spiel.toLowerCase()]||obj.spiel.toLowerCase(),category=categoryAliases[obj.kategorie.toLowerCase()]||obj.kategorie.toLowerCase();
+  const mode=({'kaufen':'verkauf','verkaufen':'verkauf','verkauf':'verkauf','sale':'verkauf','tauschen':'tausch','tausch':'tausch','trade':'tausch'})[obj.art.toLowerCase()];
+  const stock=Number(obj.bestand.replace(/\s/g,''));
+  const priceText=obj.preis.replace(/€/g,'').replace(/\s/g,'').replace(/\.(?=\d{3}(?:,|$))/g,'').replace(',','.');
+  const price=Number(priceText);
+  if(!obj.titel||obj.titel.length>200||!obj.beschreibung||!obj.ort||!CATEGORY_SETS[game]?.some(c=>c[0]===category)||!mode||!obj.bestand||!Number.isInteger(stock)||stock<1||stock>2147483647||mode==='verkauf'&&(!obj.preis||!Number.isFinite(price)||price<0)||mode==='tausch'&&!obj.tauschwunsch)throw new Error(`Zeile ${index+2}: Titel, Spiel, Kategorie, Art, Preis, Bestand oder Pflichtangaben prüfen.`);
+  return {id:crypto.randomUUID(),title:obj.titel,game,category,mode,price:mode==='verkauf'?price:null,stock,city:obj.ort,has_text:obj.beschreibung,wants_text:mode==='tausch'?obj.tauschwunsch:null,status:'aktiv'};
  });
 }
 function openCSVImport(){
  let preview=[];openSheet('<button class="sheet-close" onclick="closeSheet()">✕</button><h2>Bestand importieren</h2><p class="field-hint">Bis zu 100 Inserate, maximal 1 MB. UTF-8, Semikolon oder Komma. Fotos kannst du danach über „Bearbeiten“ ergänzen. Die Vorlage enthält die gültigen Spalten.</p><button class="btn btn-secondary" id="csvTemplate">Vorlage herunterladen</button><p><input type="file" id="csvFile" accept=".csv,text/csv" aria-label="CSV-Datei"></p><div id="csvPreview" role="status"></div><button class="btn btn-primary" id="csvSubmit" disabled>Importieren</button>');
  document.getElementById('csvTemplate').onclick=()=>{const csv='Titel;Spiel;Kategorie;Art;Preis;Bestand;Ort;Beschreibung;Tauschwunsch\r\nBeispielkarte;pokemon;einzel;verkauf;5,50;3;Wien;Sehr guter Zustand;\r\n';const url=URL.createObjectURL(new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8'}));const a=document.createElement('a');a.href=url;a.download='traderei-import-vorlage.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
  const button=document.getElementById('csvSubmit'),file=document.getElementById('csvFile'),out=document.getElementById('csvPreview');
- file.onchange=async()=>{preview=[];button.disabled=true;try{const f=file.files[0];if(!f)return;if(f.size>1024*1024)throw new Error('Maximal 1 MB.');preview=parseDealerCSV(await f.text());out.innerHTML='<p>'+preview.length+' Inserate bereit:</p><ul>'+preview.slice(0,5).map(r=>'<li>'+escapeHTML(r.title)+' · '+r.stock+' Stück</li>').join('')+'</ul><p class="field-hint">Der Import veröffentlicht diese Inserate und benachrichtigt deine Follower.</p>';button.disabled=false;}catch(e){out.textContent=e.message;}};
+ file.onchange=async()=>{preview=[];button.disabled=true;out.textContent='CSV wird geprüft …';try{const f=file.files[0];if(!f)return;if(f.size>1024*1024)throw new Error('Maximal 1 MB.');preview=parseDealerCSV(await f.text());out.innerHTML='<p>'+preview.length+' Inserate bereit:</p><ul>'+preview.slice(0,5).map(r=>'<li>'+escapeHTML(r.title)+' · '+r.stock+' Stück</li>').join('')+'</ul><p class="field-hint">Der Import veröffentlicht diese Inserate und benachrichtigt deine Follower.</p>';button.disabled=false;}catch(e){out.textContent='Import nicht möglich: '+(e.message||'CSV konnte nicht gelesen werden.');}};
  button.onclick=()=>taskButton(button,async()=>{file.disabled=true;try{const rows=preview.map(r=>({...r,owner_id:currentUser.id}));const {error}=await supabaseClient.from('listings').insert(rows);if(error){const {data}=await supabaseClient.from('listings').select('id').in('id',rows.map(r=>r.id));if(data?.length!==rows.length)throw error;}closeSheet();showToastMsg(rows.length+' Inserate importiert');await loadListingsFromSupabase();await openDealerTools();}finally{file.disabled=false;}});
 }
 async function openReservations(){if(!await signedIn())return;showView('reservations');await renderReservations(document.getElementById('reservationList'),false);}
