@@ -1,0 +1,8 @@
+{
+  "appId": "at.traderei.app",
+  "appName": "traderei",
+  "webDir": "www",
+  "backgroundColor": "#0D0E15",
+  "ios": { "contentInset": "automatic" },
+  "android": { "allowMixedContent": false }
+}

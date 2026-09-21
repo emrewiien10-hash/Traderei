@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 160 160" style="border-radius:8px; flex-shrink:0;">
+            <defs>
+              <linearGradient id="brandTile" x1="0" y1="0" x2="160" y2="160" gradientUnits="userSpaceOnUse">
+                <stop offset="0%" stop-color="#6E5AF0"/>
+                <stop offset="45%" stop-color="#8C7CFF"/>
+                <stop offset="78%" stop-color="#C264E8"/>
+                <stop offset="100%" stop-color="#FF5DA2"/>
+              </linearGradient>
+            </defs>
+            <rect x="0" y="0" width="160" height="160" rx="36" fill="url(#brandTile)"/>
+            <g transform="translate(96,90) rotate(16)">
+              <rect x="-33" y="-46" width="66" height="92" rx="11" fill="#FFFFFF" fill-opacity="0.55"/>
+              <circle cx="-19" cy="-32" r="6" fill="#6E5AF0"/>
+            </g>
+            <g transform="translate(66,72) rotate(-14)">
+              <rect x="-33" y="-46" width="66" height="92" rx="11" fill="#FFFFFF"/>
+              <circle cx="-19" cy="-32" r="12" fill="#FF5DA2"/>
+              <text x="-19" y="-27" text-anchor="middle" font-family="'Sora','Segoe UI',sans-serif" font-weight="700" font-size="17" fill="#FFFFFF">T</text>
+            </g>
+          </svg>

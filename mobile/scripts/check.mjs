@@ -1,0 +1,14 @@
+import {readFile} from 'node:fs/promises';
+import assert from 'node:assert/strict';
+import vm from 'node:vm';
+const config=JSON.parse(await readFile('capacitor.config.json','utf8'));
+assert.equal(config.appId,'at.traderei.app');assert.equal(config.webDir,'www');assert(!config.server?.url,'Production app must bundle its UI');
+const html=await readFile('www/index.html','utf8');
+for(const match of html.matchAll(/<script>([\s\S]*?)<\/script>/g))new vm.Script(match[1]);
+new vm.Script(await readFile('www/assets/native.js','utf8'));
+assert(html.includes('window.TradereiNative.geolocation.getCurrentPosition'));
+assert(!html.includes('navigator.geolocation.getCurrentPosition'));
+assert(html.includes("emailRedirectTo: 'https://www.traderei.at'"));
+assert(html.includes('viewport-fit=cover'));
+for(const match of html.matchAll(/(?:src|href)="(\/assets\/[^"?#]+)"/g))await readFile('www'+match[1]);
+console.log('PASS: packaged assets, JavaScript syntax, native location bridge, confirmation return URL, safe areas. Device testing still required.');
