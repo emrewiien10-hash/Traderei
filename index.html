@@ -2014,6 +2014,12 @@ function mapDbMessage(m, convo){
   const base = { dbId:m.id, from: m.sender_id===currentUser.id ? 'me' : 'them', type:m.type, time: formatMsgTime(m.created_at) };
   if(m.type==='offer'){
     const iAmSender = m.sender_id===currentUser.id;
+    const direct=parseDirectTrade(m);
+    if(direct){
+      const offered={title:direct.title,thumbLabel:'↔',thumbGrad:'linear-gradient(160deg,#8C7CFF,#FF5DA2)'};
+      const target=findListingByIdAnySource(m.offer_theirs_listing_id);
+      return {...base,direct,mine:iAmSender?offered:target,theirs:iAmSender?target:offered};
+    }
     return { ...base,
       mine: findListingByIdAnySource(iAmSender ? m.offer_mine_listing_id : m.offer_theirs_listing_id),
       theirs: findListingByIdAnySource(iAmSender ? m.offer_theirs_listing_id : m.offer_mine_listing_id)
@@ -2194,8 +2200,9 @@ function renderMessages(c){
     if(m.type==='offer'){
       return `<div class="offer-bubble">
         <div class="offer-title">Tauschvorschlag</div>
-        <div class="offer-row">${thumbHTML(m.mine)}<span>Dein Angebot: ${m.mine.title}</span></div>
-        <div class="offer-row">${thumbHTML(m.theirs)}<span>Gegen: ${m.theirs.title}</span></div>
+        ${m.direct?'<div class="detail-photo-thumbs" style="flex-wrap:wrap" data-trade-message="'+escapeHTML(m.dbId)+'"></div>':''}
+        <div class="offer-row">${thumbHTML(m.mine)}<span>Dein Angebot: ${escapeHTML(m.mine.title)}</span></div>
+        <div class="offer-row">${thumbHTML(m.theirs)}<span>Gegen: ${escapeHTML(m.theirs.title)}</span></div>
         <div class="bubble-time" style="color:#CBDBCF;">${m.time}</div>
       </div>`;
     }
@@ -2212,6 +2219,10 @@ function renderMessages(c){
     }
     return `<div class="bubble ${m.from==='me'?'me':'them'}">${m.text}<div class="bubble-time">${m.time}</div></div>`;
   }).join('') || `<div class="empty-state">Schreib die erste Nachricht.</div>`;
+  el.querySelectorAll('[data-trade-message]').forEach(container=>{
+    const message=c.messages.find(m=>String(m.dbId)===container.dataset.tradeMessage);
+    if(message?.direct)loadTradePhotos(container,message);
+  });
   el.scrollTop = el.scrollHeight;
 }
 document.getElementById('sendBtn').addEventListener('click', sendMessage);
@@ -2800,66 +2811,87 @@ function confirmBlock(name){
 }
 
 /* ---------------- Tausch-Vorschlag-Flow ---------------- */
-function openTradeOfferSheet(listing){
-  const myTausch = listings.filter(l=>l.mine && l.status==='aktiv' && l.mode==='tausch');
+async function openTradeOfferSheet(listing){
+  const user=await requireAuth();if(!user)return;currentUser=user;
+  const mine=listings.filter(l=>l.mine&&l.status==='aktiv'&&l.mode==='tausch');
   openSheet(`
     <button class="sheet-close" onclick="closeSheet()">✕</button>
-    <div class="sheet-title">Tausch vorschlagen</div>
-    <div class="sheet-sub">Wähle eine deiner Anzeigen, die du gegen „${listing.title}" anbieten möchtest.</div>
-    ${myTausch.length ? myTausch.map(l=>`
-      <div class="pick-item" data-pickid="${l.id}">
-        ${thumbHTML(l)}
-        <div><div class="pick-item-title">${l.title}</div><div class="pick-item-sub">${l.has}</div></div>
-      </div>`).join('') : `<div class="empty-state">Du hast noch keine aktive Tausch-Anzeige. Erstelle zuerst eine, um einen Vorschlag zu machen.</div>`}
-    ${myTausch.length ? `<button class="btn btn-primary" style="width:100%; margin-top:8px;" id="sendOfferBtn" disabled>Vorschlag senden</button>` : ''}
-  `);
-  let selectedId = null;
-  document.querySelectorAll('.pick-item[data-pickid]').forEach(el=>{
-    el.addEventListener('click', ()=>{
-      document.querySelectorAll('.pick-item[data-pickid]').forEach(x=>x.classList.remove('selected'));
-      el.classList.add('selected');
-      selectedId = el.dataset.pickid;
-      const btn = document.getElementById('sendOfferBtn');
-      if(btn) btn.disabled = false;
-    });
-  });
-  const sendBtn = document.getElementById('sendOfferBtn');
-  if(sendBtn) sendBtn.addEventListener('click', ()=>{
-    if(!selectedId) return;
-    const mine = listings.find(l=>String(l.id)===String(selectedId));
-    sendTradeOffer(listing, mine);
-  });
+    <h2>Tausch vorschlagen</h2><p>Für „${escapeHTML(listing.title)}“</p>
+    <label for="tradeMode">Dein Angebot</label>
+    <select class="text-input" id="tradeMode"><option value="direct">Titel und Fotos eingeben</option value="listing">Eigenes Inserat auswählen</option></select>
+    <div id="tradeDirect"><label for="tradeTitle">Was möchtest du tauschen?</label>
+    <input class="text-input" id="tradeTitle" maxlength="150" placeholder="z. B. Glurak ex in sehr gutem Zustand">
+    <label for="tradeFiles">Fotos hinzufügen (optional)</label><input id="tradeFiles" type="file" multiple accept="image/jpeg,image/png,image/webp">
+    <p class="field-hint">Bis zu 5 Fotos, je maximal 8 MB. Nur dein Gesprächspartner sieht dein Angebot.</p>
+    <div id="tradePreview" class="detail-photo-thumbs" style="flex-wrap:wrap"></div></div>
+    <div id="tradeExisting" style="display:none"><label for="tradeListing">Eigenes Inserat</label>
+    <select class="text-input" id="tradeListing"><option value="">Bitte auswählen</option>${mine.map(l=>`<option value="${escapeHTML(l.id)}">${escapeHTML(l.title)}</option>`).join('')}</select>
+    ${mine.length?'':'<p>Du hast keine aktiven Tauschinserate. Du kannst stattdessen Titel und Fotos eingeben.</p>'}</div>
+    <p id="tradeError" role="alert"></p><button class="btn btn-primary" id="sendOfferBtn">Vorschlag senden</button>`);
+  const mode=document.getElementById('tradeMode'),title=document.getElementById('tradeTitle'),input=document.getElementById('tradeFiles'),preview=document.getElementById('tradePreview'),error=document.getElementById('tradeError'),button=document.getElementById('sendOfferBtn');
+  let photos=[],busy=false;
+  mode.onchange=()=>{document.getElementById('tradeDirect').style.display=mode.value==='direct'?'block':'none';document.getElementById('tradeExisting').style.display=mode.value==='listing'?'block':'none';};
+  const draw=()=>{preview.replaceChildren();photos.forEach((p,i)=>{const wrap=document.createElement('div'),img=document.createElement('img'),remove=document.createElement('button');img.src=p.preview;img.alt='Angebotsfoto '+(i+1);remove.type='button';remove.textContent='Entfernen';remove.disabled=busy;remove.onclick=()=>{photos.splice(i,1);draw();};wrap.append(img,remove);preview.append(wrap);});};
+  input.onchange=async()=>{error.textContent='';const files=Array.from(input.files||[]);input.value='';
+    if(photos.length+files.length>5){error.textContent='Bitte maximal 5 Fotos auswählen.';return;}
+    if(files.some(f=>!['image/jpeg','image/png','image/webp'].includes(f.type)||f.size>8388608)){error.textContent='Bitte JPG, PNG oder WebP bis 8 MB verwenden.';return;}
+    input.disabled=true;button.disabled=true;
+    try{for(const file of files){const data=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=reject;reader.readAsDataURL(file);});photos.push({file,preview:data});}draw();}
+    catch{error.textContent='Ein Foto konnte nicht gelesen werden.';}finally{input.disabled=false;button.disabled=false;}
+  };
+  button.onclick=async()=>{if(busy)return;error.textContent='';
+    const selected=mine.find(l=>l.id===document.getElementById('tradeListing').value);
+    if(mode.value==='direct'&&!title.value.trim()){error.textContent='Bitte einen Titel eingeben.';title.focus();return;}
+    if(mode.value==='listing'&&!selected){error.textContent='Bitte ein Inserat auswählen.';return;}
+    busy=true;button.disabled=true;input.disabled=true;mode.disabled=true;draw();button.textContent='Wird gesendet …';
+    try{await sendTradeOffer(listing,mode.value==='listing'?selected:{title:title.value.trim(),direct:true,files:photos.map(p=>p.file)});}
+    catch(e){error.textContent=e.message||'Senden fehlgeschlagen. Dein Angebot bleibt erhalten.';}
+    finally{busy=false;button.disabled=false;input.disabled=false;mode.disabled=false;button.textContent='Vorschlag senden';draw();}
+  };
 }
-async function sendTradeOffer(theirListing, myListing){
-  closeSheet();
-  if(supabaseClient && currentUser){
-    const convo = await getOrCreateConversation({
-      listingId: theirListing.id, otherId: theirListing.seller.id, otherName: theirListing.seller.name, sub:'Zu: '+theirListing.title
-    });
-    if(!convo) return;
-    const { data, error } = await supabaseClient.from('messages').insert({
-      conversation_id: convo.id, sender_id: currentUser.id, type:'offer',
-      offer_mine_listing_id: myListing.id, offer_theirs_listing_id: theirListing.id
-    }).select().single();
-    if(error){ showToastMsg('Fehler: ' + error.message); return; }
-    convo.messages.push(mapDbMessage(data, convo));
-    convo.time = 'gerade eben';
-    renderChatlist();
-    openChat(convo.id);
-    showToastMsg('Tauschvorschlag gesendet');
-    return;
-  }
-  let convo = conversations.find(c=>c.listingId===theirListing.id && c.partner===theirListing.seller.name);
-  if(!convo){
-    convo = {id:'c'+Date.now(), listingId:theirListing.id, partner:theirListing.seller.name, sub:'Zu: '+theirListing.title, unread:false, time:'jetzt', messages:[], isReal:false};
-    conversations.unshift(convo);
-  }
-  convo.messages.push({from:'me', type:'offer', mine:myListing, theirs:theirListing, time:'jetzt'});
-  convo.time = 'jetzt';
-  renderChatlist();
-  openChat(convo.id);
-  showToastMsg('Tauschvorschlag gesendet');
+async function sendTradeOffer(theirListing,myListing){
+  if(!supabaseClient||!currentUser)throw new Error('Bitte erneut einloggen.');
+  const convo=await getOrCreateConversation({listingId:theirListing.id,otherId:theirListing.seller.id,otherName:theirListing.seller.name,sub:'Zu: '+theirListing.title});
+  if(!convo)throw new Error('Chat konnte nicht geöffnet werden.');
+  const paths=[];
+  try{
+    for(const file of myListing.files||[]){
+      const ext={'image/jpeg':'jpg','image/png':'png','image/webp':'webp'}[file.type];
+      const path=convo.id+'/'+currentUser.id+'/'+crypto.randomUUID()+'.'+ext;
+      const {error}=await supabaseClient.storage.from('trade-photos').upload(path,file,{contentType:file.type,upsert:false});
+      if(error)throw error;paths.push(path);
+    }
+  }catch(e){if(paths.length)await supabaseClient.storage.from('trade-photos').remove(paths);throw e;}
+  const {data,error}=await supabaseClient.from('messages').insert({
+    conversation_id:convo.id,sender_id:currentUser.id,type:'offer',
+    offer_mine_listing_id:myListing.direct?null:myListing.id,offer_theirs_listing_id:theirListing.id,
+    content:myListing.direct?JSON.stringify({version:1,kind:'direct-trade',title:myListing.title,photos:paths}):null
+  }).select().single();
+  // Keep uploaded files on an ambiguous network error: the message may already exist.
+  if(error)throw new Error('Senden fehlgeschlagen. Bitte prüfe den Chat, bevor du es erneut versuchst.');
+  if(!convo.messages.some(m=>m.dbId===data.id))convo.messages.push(mapDbMessage(data,convo));
+  convo.time='gerade eben';closeSheet();renderChatlist();openChat(convo.id);showToastMsg('Tauschvorschlag gesendet');
 }
+function parseDirectTrade(message){
+  try{
+    const d=JSON.parse(message.content);
+    if(d?.kind!=='direct-trade'||d.version!==1||typeof d.title!=='string'||!d.title.trim()||d.title.length>150)return null;
+    const prefix=message.conversation_id+'/'+message.sender_id+'/';
+    return {title:d.title,paths:Array.isArray(d.photos)?d.photos.filter(p=>typeof p==='string'&&p.startsWith(prefix)&&!p.includes('..')).slice(0,5):[]};
+  }catch{return null;}
+}
+async function loadTradePhotos(container,message){
+  const urls=[];
+  for(const path of message.direct.paths){
+    const {data,error}=await supabaseClient.storage.from('trade-photos').createSignedUrl(path,300);
+    if(!container.isConnected)return;
+    if(error){const retry=document.createElement('button');retry.textContent='Foto erneut laden';retry.onclick=()=>{container.replaceChildren();loadTradePhotos(container,message);};container.append(retry);continue;}
+    const index=urls.length;urls.push({url:data.signedUrl});
+    const button=document.createElement('button'),img=document.createElement('img');button.type='button';button.setAttribute('aria-label','Foto '+(index+1)+' vergrößern');img.src=data.signedUrl;img.alt=message.direct.title;
+    button.append(img);button.onclick=()=>openPhotoViewer({title:message.direct.title,photos:urls},index);container.append(button);
+  }
+}
+
 
 /* ---------------- Bewertung ---------------- */
 function openRatingSheet(id){
@@ -3750,3 +3782,4 @@ loadListingsFromSupabase();
 </script>
 </body>
 </html>
+
