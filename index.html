@@ -2813,7 +2813,15 @@ function confirmBlock(name){
 /* ---------------- Tausch-Vorschlag-Flow ---------------- */
 async function openTradeOfferSheet(listing){
   const user=await requireAuth();if(!user)return;currentUser=user;
-  const mine=listings.filter(l=>l.mine&&l.status==='aktiv'&&l.mode==='tausch');
+  let mine=[],listingLoadError=false;
+  try{
+    for(let offset=0;;offset+=500){
+      const {data,error}=await supabaseClient.from('listings').select('id,title').eq('owner_id',user.id).eq('status','aktiv').order('id').range(offset,offset+499);
+      if(error)throw error;
+      mine.push(...(data||[]).filter(item=>String(item.id)!==String(listing.id)));
+      if(!data||data.length<500)break;
+    }
+  }catch{listingLoadError=true;mine=[];}
   openSheet(`
     <button class="sheet-close" onclick="closeSheet()">✕</button>
     <h2>Tausch vorschlagen</h2><p>Für „${escapeHTML(listing.title)}“</p>
@@ -2826,11 +2834,13 @@ async function openTradeOfferSheet(listing){
     <div id="tradePreview" class="detail-photo-thumbs" style="flex-wrap:wrap"></div></div>
     <div id="tradeExisting" style="display:none"><label for="tradeListing">Eigenes Inserat</label>
     <select class="text-input" id="tradeListing"><option value="">Bitte auswählen</option>${mine.map(l=>`<option value="${escapeHTML(l.id)}">${escapeHTML(l.title)}</option>`).join('')}</select>
-    ${mine.length?'':'<p>Du hast keine aktiven Tauschinserate. Du kannst stattdessen Titel und Fotos eingeben.</p>'}</div>
+    ${listingLoadError?'<p role="alert">Deine Inserate konnten nicht geladen werden. Bitte schließe den Dialog und versuche es erneut. Die manuelle Eingabe ist weiterhin möglich.</p>':mine.length?'':'<p>Du hast keine aktiven Inserate. Wähle „Titel und Fotos eingeben“, um direkt etwas anzubieten.</p>'}</div>
     <p id="tradeError" role="alert"></p><button class="btn btn-primary" id="sendOfferBtn">Vorschlag senden</button>`);
   const mode=document.getElementById('tradeMode'),title=document.getElementById('tradeTitle'),input=document.getElementById('tradeFiles'),preview=document.getElementById('tradePreview'),error=document.getElementById('tradeError'),button=document.getElementById('sendOfferBtn');
   let photos=[],busy=false;
-  mode.onchange=()=>{document.getElementById('tradeDirect').style.display=mode.value==='direct'?'block':'none';document.getElementById('tradeExisting').style.display=mode.value==='listing'?'block':'none';};
+  Object.defineProperty(mode,'value',{get:()=>mode.querySelector('input:checked').value});
+  mode.onchange=()=>{document.getElementById('tradeDirect').style.display=mode.value==='direct'?'block':'none';document.getElementById('tradeExisting').style.display=mode.value==='listing'?'block':'none';error.textContent='';};
+  mode.onchange();
   const draw=()=>{preview.replaceChildren();photos.forEach((p,i)=>{const wrap=document.createElement('div'),img=document.createElement('img'),remove=document.createElement('button');img.src=p.preview;img.alt='Angebotsfoto '+(i+1);remove.type='button';remove.textContent='Entfernen';remove.disabled=busy;remove.onclick=()=>{photos.splice(i,1);draw();};wrap.append(img,remove);preview.append(wrap);});};
   input.onchange=async()=>{error.textContent='';const files=Array.from(input.files||[]);input.value='';
     if(photos.length+files.length>5){error.textContent='Bitte maximal 5 Fotos auswählen.';return;}
