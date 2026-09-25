@@ -1331,6 +1331,8 @@ ALTER TABLE public.listings
 const SUPABASE_URL = 'https://jejeywhpqecxxfiythep.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImplamV5d2hwcWVjeHhmaXl0aGVwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkxMzI1NzQsImV4cCI6MjEwNDcwODU3NH0.cuiCnawDmqhPC_0u9jSLKstVCYWLDjY9qCmdBWjj68c';
 
+const authReturnParams = new URLSearchParams(location.hash.slice(1));
+let recoveryUserId = null;
 let supabaseClient = null;
 try {
   if (SUPABASE_URL !== 'DEINE_PROJECT_URL' && SUPABASE_ANON_KEY !== 'DEIN_ANON_KEY') {
@@ -2423,7 +2425,31 @@ document.getElementById('menuAuthAction').addEventListener('click', ()=>{
 });
 
 if(supabaseClient){
-  supabaseClient.auth.onAuthStateChange(()=>{ updateAuthUI(); });
+  supabaseClient.auth.onAuthStateChange((event, session)=>{
+    // Defer SDK calls until its auth-state lock has been released.
+    if(event==='PASSWORD_RECOVERY' && session?.user){
+      recoveryUserId=session.user.id;
+      try{sessionStorage.setItem('traderei-recovery-user',recoveryUserId);}catch{}
+      setTimeout(()=>openNewPasswordSheet(),0);
+    }
+    if(event==='SIGNED_OUT'){
+      recoveryUserId=null;
+      try{sessionStorage.removeItem('traderei-recovery-user');}catch{}
+    }
+    setTimeout(()=>updateAuthUI(),0);
+  });
+  setTimeout(async()=>{
+    if(authReturnParams.has('error')){
+      history.replaceState(null,'',location.pathname+location.search);
+      openForgotPasswordSheet('', 'Der Link ist ungültig oder abgelaufen. Bitte fordere einen neuen Link an.');
+      return;
+    }
+    let saved;try{saved=sessionStorage.getItem('traderei-recovery-user');}catch{}
+    if(saved && !recoveryUserId){
+      const {data:{session}}=await supabaseClient.auth.getSession();
+      if(session?.user.id===saved){recoveryUserId=saved;openNewPasswordSheet();}
+    }
+  },0);
 }
 
 /* ---------------- Inserat erstellen ---------------- */
@@ -2583,8 +2609,8 @@ async function requireAuth(){
   return new Promise((resolve)=>{ openAuthSheet(resolve); });
 }
 
-function openAuthSheet(resolve){
-  let mode = 'signup';
+function openAuthSheet(resolve=()=>{}, initialMode='signup'){
+  let mode = initialMode;
   function render(){
     openSheet(`
       <button class="sheet-close" onclick="closeSheet()">✕</button>
@@ -2608,6 +2634,7 @@ function openAuthSheet(resolve){
       ` : ''}
       <input class="text-input" id="authEmail" type="email" placeholder="E-Mail" style="margin-bottom:10px;">
       <input class="text-input" id="authPassword" type="password" placeholder="Passwort (min. 6 Zeichen)">
+      ${mode==='login' ? `<button type="button" class="btn" id="forgotPasswordBtn" style="background:transparent;color:var(--forest-light);width:100%;margin-top:6px">Passwort vergessen?</button>` : ''}
       ${mode==='signup' ? `<label class="auth-terms"><input type="checkbox" id="authAcceptTerms"><span>Ich akzeptiere die <a href="/agb.html" target="_blank" rel="noopener">AGB</a>.</span></label>` : ''}
       <p class="field-hint auth-privacy">Informationen zur Verarbeitung deiner Daten findest du in der <a href="/datenschutz.html" target="_blank" rel="noopener">Datenschutzerklärung</a>.</p>
       <div class="field-error" id="authError" style="margin-top:8px;"></div>
@@ -2617,6 +2644,7 @@ function openAuthSheet(resolve){
         <span id="authToggle" style="color:var(--forest); font-weight:700; cursor:pointer;">${mode==='signup' ? 'Einloggen' : 'Registrieren'}</span>
       </div>
     `);
+    document.getElementById('forgotPasswordBtn')?.addEventListener('click',()=>{const email=document.getElementById('authEmail').value.trim();resolve(null);openForgotPasswordSheet(email);});
     document.getElementById('authAccountType')?.addEventListener('change',e=>{document.getElementById('authDealerFields').hidden=e.target.value!=='dealer';});
     document.getElementById('authToggle').addEventListener('click', ()=>{
       mode = mode==='signup' ? 'login' : 'signup';
@@ -2679,6 +2707,77 @@ function openAuthSheet(resolve){
     });
   }
   render();
+}
+
+/* ---------------- Passwort per E-Mail zurücksetzen ---------------- */
+function passwordResetError(error){
+  if(error?.status===429 || /rate.limit|too many/i.test(error?.message||'')) return 'Zu viele Anfragen. Bitte warte etwas und versuche es erneut.';
+  if(error?.code==='same_password') return 'Bitte wähle ein anderes als dein bisheriges Passwort.';
+  if(error?.code==='weak_password') return 'Das Passwort ist zu schwach. Bitte wähle ein längeres, sicheres Passwort.';
+  return 'Das hat leider nicht geklappt. Bitte prüfe deine Internetverbindung und versuche es erneut. Falls der Link abgelaufen ist, fordere einen neuen an.';
+}
+function openForgotPasswordSheet(email='', notice=''){
+  openSheet(`
+    <button class="sheet-close" aria-label="Schließen" onclick="closeSheet()">✕</button>
+    <h2 class="sheet-title">Passwort vergessen?</h2>
+    <p class="sheet-sub">Gib deine E-Mail-Adresse ein. Du erhältst einen Link, mit dem du ein neues Passwort festlegen kannst.</p>
+    <form id="passwordResetRequest">
+      <label class="field-label" for="resetEmail">E-Mail-Adresse</label>
+      <input class="text-input" id="resetEmail" type="email" autocomplete="email" required>
+      <p id="resetStatus" role="status" aria-live="polite" style="font-size:14px;line-height:1.5"></p>
+      <button class="btn btn-primary" style="width:100%" id="resetSendBtn" type="submit">Link per E-Mail senden</button>
+    </form>
+    <button class="btn" type="button" style="width:100%;margin-top:10px;background:transparent;color:var(--forest-light)" onclick="openAuthSheet(undefined,'login')">Zurück zum Login</button>
+  `);
+  const input=document.getElementById('resetEmail'), status=document.getElementById('resetStatus'), button=document.getElementById('resetSendBtn');
+  input.value=email;status.textContent=notice;input.focus();
+  document.getElementById('passwordResetRequest').onsubmit=async(event)=>{
+    event.preventDefault();if(button.disabled)return;
+    button.disabled=true;button.textContent='Wird gesendet …';status.textContent='';
+    try{
+      // Returning to the existing root URL also supports the configured Site URL fallback.
+      const {error}=await supabaseClient.auth.resetPasswordForEmail(input.value.trim(),{redirectTo:location.origin+'/'});
+      if(error)throw error;
+      status.textContent='Falls ein Konto mit dieser E-Mail-Adresse existiert, erhältst du eine E-Mail zum Zurücksetzen. Prüfe auch deinen Spam-Ordner.';
+      button.textContent='Link angefordert';
+      setTimeout(()=>{if(button.isConnected){button.disabled=false;button.textContent='Link erneut senden';}},60000);
+    }catch(error){status.textContent=passwordResetError(error);button.disabled=false;button.textContent='Erneut versuchen';}
+  };
+}
+function openNewPasswordSheet(){
+  if(!recoveryUserId)return;
+  openSheet(`
+    <button class="sheet-close" aria-label="Schließen" onclick="closeSheet()">✕</button>
+    <h2 class="sheet-title">Neues Passwort festlegen</h2>
+    <p class="sheet-sub">Wähle ein sicheres Passwort mit mindestens 8 Zeichen.</p>
+    <form id="newPasswordForm">
+      <label class="field-label" for="newPassword">Neues Passwort</label>
+      <input class="text-input" id="newPassword" type="password" autocomplete="new-password" minlength="8" required>
+      <label class="field-label" for="repeatPassword" style="display:block;margin-top:14px">Passwort wiederholen</label>
+      <input class="text-input" id="repeatPassword" type="password" autocomplete="new-password" minlength="8" required>
+      <p id="newPasswordStatus" role="status" aria-live="polite" style="font-size:14px;line-height:1.5"></p>
+      <button class="btn btn-primary" style="width:100%" id="savePasswordBtn" type="submit">Passwort speichern</button>
+    </form>
+    <button class="btn" type="button" style="width:100%;margin-top:10px;background:transparent;color:var(--forest-light)" onclick="openForgotPasswordSheet()">Neuen Link anfordern</button>
+  `);
+  document.getElementById('newPassword').focus();
+  document.getElementById('newPasswordForm').onsubmit=async(event)=>{
+    event.preventDefault();const button=document.getElementById('savePasswordBtn'),status=document.getElementById('newPasswordStatus');
+    if(button.disabled)return;
+    const password=document.getElementById('newPassword').value;
+    if(password.length<8){status.textContent='Bitte mindestens 8 Zeichen verwenden.';return;}
+    if(password!==document.getElementById('repeatPassword').value){status.textContent='Die Passwörter stimmen nicht überein.';return;}
+    button.disabled=true;button.textContent='Wird gespeichert …';status.textContent='';
+    try{
+      const {data:{session},error:sessionError}=await supabaseClient.auth.getSession();
+      if(sessionError || !session || session.user.id!==recoveryUserId){status.textContent='Dein Link ist abgelaufen. Bitte fordere einen neuen Link an.';button.disabled=false;button.textContent='Passwort speichern';return;}
+      const {error}=await supabaseClient.auth.updateUser({password});
+      if(error)throw error;
+      recoveryUserId=null;try{sessionStorage.removeItem('traderei-recovery-user');}catch{}
+      history.replaceState(null,'',location.pathname+location.search);
+      openSheet('<h2 class="sheet-title">Passwort geändert</h2><p class="sheet-sub">Dein neues Passwort wurde gespeichert. Du bist angemeldet und kannst Traderei weiter nutzen.</p><button class="btn btn-primary" style="width:100%" onclick="closeSheet()">Weiter zu Traderei</button>');
+    }catch(error){status.textContent=passwordResetError(error);button.disabled=false;button.textContent='Passwort speichern';}
+  };
 }
 
 /* ---------------- Foto-Upload zu Supabase Storage ---------------- */
